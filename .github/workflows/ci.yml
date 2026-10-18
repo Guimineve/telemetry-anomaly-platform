@@ -129,3 +129,33 @@ jobs:
           push: false
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
+
+  k8s-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Render manifests and validate against the Kubernetes schemas
+        run: |
+          kubectl kustomize deploy/k8s/overlays/kind \
+            | docker run -i --rm ghcr.io/yannh/kubeconform:v0.6.7 -strict -summary -
+
+  kind-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install httpx websockets
+      - uses: helm/kind-action@v1
+        with:
+          install_only: true
+      - name: Build the four images
+        run: |
+          docker build -t telemetry-simulator:ci simulator
+          docker build -t telemetry-analysis:ci analysis
+          docker build -t telemetry-web:ci web
+          docker build -t telemetry-ingestion:ci -f ingestion/Dockerfile .
+      - name: Deploy to a kind cluster and run the end-to-end smoke test
+        run: scripts/kind-e2e.sh telemetry- ci
