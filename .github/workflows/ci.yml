@@ -91,6 +91,8 @@ jobs:
         run: docker compose up --build --wait --wait-timeout 300 -d
       - name: End-to-end smoke test
         run: python scripts/smoke.py
+      - name: Failure modes (stop MongoDB, analysis, PostgreSQL, Kafka; check nothing is lost)
+        run: python scripts/failure_modes.py
       - name: Dump logs on failure
         if: failure()
         run: docker compose logs --no-color --tail 200

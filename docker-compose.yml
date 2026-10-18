@@ -115,7 +115,7 @@ services:
     depends_on:
       analysis: { condition: service_healthy }
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 5s
       timeout: 5s
       retries: 20
