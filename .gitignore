@@ -1,0 +1,19 @@
+# Java
+target/
+*.class
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# Node
+node_modules/
+web/dist/
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+# Env
+.env
