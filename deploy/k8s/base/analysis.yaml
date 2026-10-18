@@ -1,0 +1,51 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: analysis
+spec:
+  selector: { app: analysis }
+  ports:
+    - { port: 8000, targetPort: 8000 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analysis
+spec:
+  replicas: 1 # more replicas work: Kafka partitions the readings, each replica broadcasts all alerts
+  selector:
+    matchLabels: { app: analysis }
+  template:
+    metadata:
+      labels: { app: analysis }
+    spec:
+      enableServiceLinks: false
+      initContainers:
+        - name: wait-for-deps
+          image: busybox:1.36
+          command: ["/bin/sh", "-c", "until nc -z kafka 9092 && nc -z postgres 5432; do echo waiting; sleep 2; done"]
+      containers:
+        - name: analysis
+          image: telemetry-analysis:dev
+          ports:
+            - containerPort: 8000
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-credentials, key: POSTGRES_PASSWORD } }
+            - name: DATABASE_URL
+              value: "postgresql+asyncpg://telemetry:$(POSTGRES_PASSWORD)@postgres:5432/telemetry"
+            - { name: KAFKA_BOOTSTRAP, value: "kafka:9092" }
+            - { name: STARTUP_GRACE_S, value: "5" }
+          startupProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 3
+            failureThreshold: 40
+          livenessProbe:
+            httpGet: { path: /health, port: 8000 }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /ready, port: 8000 }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { memory: 512Mi }
