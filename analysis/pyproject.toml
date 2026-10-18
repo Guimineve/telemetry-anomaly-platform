@@ -1,0 +1,53 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "telemetry-analysis"
+version = "0.1.0"
+description = "Rules engine, alerting, REST API and live WebSocket for telemetry"
+requires-python = ">=3.12"
+dependencies = [
+  "aiokafka>=0.11",
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.30",
+  "sqlalchemy[asyncio]>=2.0",
+  "asyncpg>=0.29",
+  "alembic>=1.13",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8",
+  "pytest-asyncio>=0.24",
+  "httpx>=0.27",
+  "jsonschema>=4.22",
+  "ruff>=0.6",
+  "mypy>=1.11",
+  "testcontainers[postgres,kafka]>=4.8",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/analysis"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
+markers = ["integration: needs Docker (Testcontainers); skipped when Docker is unavailable"]
+
+[tool.ruff]
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+disable_error_code = ["import-untyped"]
+check_untyped_defs = true
+warn_unused_ignores = true
