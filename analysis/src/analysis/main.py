@@ -6,7 +6,7 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
 from .api.routes import router
 from .broadcast import Broadcaster
@@ -77,9 +77,10 @@ def create_app(settings: Settings | None = None, run_worker: bool = True) -> Fas
 
     @app.get("/ready", tags=["ops"])
     async def ready() -> dict[str, bool]:
-        return {"ready": bool(getattr(app.state, "worker", None) and app.state.worker.ready)}
+        worker = getattr(app.state, "worker", None)
+        if worker is None or not worker.ready:
+            raise HTTPException(503, "worker not started")
+        return {"ready": True}
 
     return app
 
-
-app = create_app

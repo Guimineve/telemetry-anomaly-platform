@@ -36,6 +36,20 @@ services:
       timeout: 5s
       retries: 20
 
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: telemetry
+      POSTGRES_PASSWORD: telemetry
+      POSTGRES_DB: telemetry
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telemetry -d telemetry"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
   ingestion:
     build:
       context: .
@@ -68,6 +82,40 @@ services:
       kafka: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  analysis:
+    build:
+      context: ./analysis
+    environment:
+      DATABASE_URL: postgresql+asyncpg://telemetry:telemetry@postgres:5432/telemetry
+      KAFKA_BOOTSTRAP: kafka:9092
+      STARTUP_GRACE_S: "5"
+    ports:
+      - "8000:8000"
+    depends_on:
+      kafka: { condition: service_healthy }
+      postgres: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/ready')"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
+
+  web:
+    build:
+      context: ./web
+    environment:
+      ANALYSIS_UPSTREAM: http://analysis:8000
+    ports:
+      - "3000:8080"
+    depends_on:
+      analysis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
       interval: 5s
       timeout: 5s
       retries: 20
