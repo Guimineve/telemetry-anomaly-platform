@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Guimineve/telemetry-anomaly-platform/contracts/alert.schema.json",
+  "title": "Alert",
+  "description": "An alert raised or resolved by the analysis service.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "ruleId", "ruleName", "ruleType", "deviceId", "severity", "state", "message", "timestamp"],
+  "properties": {
+    "id": { "type": "string" },
+    "ruleId": { "type": "string" },
+    "ruleName": { "type": "string" },
+    "ruleType": { "type": "string", "enum": ["threshold", "rate_of_change", "missing_heartbeat", "zscore"] },
+    "deviceId": { "type": "string" },
+    "metric": { "type": ["string", "null"] },
+    "severity": { "type": "string", "enum": ["info", "warning", "critical"] },
+    "state": { "type": "string", "enum": ["open", "resolved"] },
+    "message": { "type": "string" },
+    "value": { "type": ["number", "null"] },
+    "timestamp": { "type": "string" }
+  }
+}
