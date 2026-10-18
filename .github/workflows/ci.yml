@@ -39,6 +39,26 @@ jobs:
       - run: cd analysis && mypy src
       # unit tests + Testcontainers integration tests (Postgres, Kafka); the runner has Docker
       - run: pytest analysis -q -rs
+      # docs/openapi.json is checked against the generated spec by tests/test_openapi.py;
+      # this step also fails the build if regenerating would change the file
+      - run: cd analysis && python -m analysis.export_openapi > /tmp/openapi.json && diff /tmp/openapi.json ../docs/openapi.json
+
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
 
   ingestion:
     runs-on: ubuntu-latest
