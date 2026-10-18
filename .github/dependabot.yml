@@ -1,0 +1,20 @@
+version: 2
+updates:
+  - package-ecosystem: maven
+    directory: /ingestion
+    schedule: { interval: weekly }
+  - package-ecosystem: pip
+    directory: /analysis
+    schedule: { interval: weekly }
+  - package-ecosystem: pip
+    directory: /simulator
+    schedule: { interval: weekly }
+  - package-ecosystem: npm
+    directory: /web
+    schedule: { interval: weekly }
+  - package-ecosystem: docker
+    directory: /ingestion
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
