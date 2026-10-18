@@ -79,7 +79,7 @@ async def main() -> None:
             ("web", f"{WEB}/healthz"),
             ("analysis api", f"{WEB}/api/v1/rules"),
         ):
-            await wait_until(name, lambda url=url: http.get(url).is_success, 90)
+            await wait_until(name, lambda url=url: _is_up(http, url), 90)
         rules = (await http.get(f"{WEB}/api/v1/rules")).json()
         if not rules:
             fail("no rules seeded")
@@ -166,6 +166,10 @@ async def main() -> None:
         log("silent-device alert resolved after the device came back")
 
     log("OK")
+
+
+async def _is_up(http, url):
+    return (await http.get(url)).is_success
 
 
 async def _threshold_alerts(http, known_ids):
