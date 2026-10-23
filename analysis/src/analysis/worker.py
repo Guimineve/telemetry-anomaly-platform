@@ -21,6 +21,11 @@ from .store import Store
 
 log = logging.getLogger("analysis.worker")
 
+# A consumer that joins its group before a new topic's partitions appear in the cluster metadata
+# is assigned nothing, and only notices the partitions on its next metadata refresh (aiokafka's
+# default is 5 minutes). Topics are created at startup, so refresh often enough to self-heal fast.
+METADATA_MAX_AGE_MS = 5_000
+
 
 class KafkaAlertPublisher:
     def __init__(self, producer: AIOKafkaProducer, topic: str) -> None:
@@ -118,6 +123,7 @@ class Worker:
             group_id=self.settings.consumer_group,
             enable_auto_commit=False,
             auto_offset_reset="earliest",
+            metadata_max_age_ms=METADATA_MAX_AGE_MS,
         )
         await retry_forever("start consumer", self._consumer.start)
         self._consumer.subscribe([self.settings.topic_validated], listener=_Reseed(self))
