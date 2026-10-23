@@ -185,6 +185,43 @@
         "title": "LoginIn",
         "type": "object"
       },
+      "PasswordChangeIn": {
+        "properties": {
+          "currentPassword": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Currentpassword",
+            "type": "string"
+          },
+          "newPassword": {
+            "maxLength": 128,
+            "minLength": 10,
+            "title": "Newpassword",
+            "type": "string"
+          }
+        },
+        "required": [
+          "currentPassword",
+          "newPassword"
+        ],
+        "title": "PasswordChangeIn",
+        "type": "object"
+      },
+      "PasswordResetIn": {
+        "properties": {
+          "newPassword": {
+            "maxLength": 128,
+            "minLength": 10,
+            "title": "Newpassword",
+            "type": "string"
+          }
+        },
+        "required": [
+          "newPassword"
+        ],
+        "title": "PasswordResetIn",
+        "type": "object"
+      },
       "RegisterIn": {
         "properties": {
           "password": {
@@ -914,6 +951,30 @@
         ]
       }
     },
+    "/api/v1/auth/logout-all": {
+      "post": {
+        "operationId": "logout_all_api_v1_auth_logout_all_post",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          }
+        },
+        "summary": "End every session of the current user, including this one",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "operationId": "me_api_v1_auth_me_get",
@@ -940,6 +1001,70 @@
           }
         },
         "summary": "Current user",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/api/v1/auth/password": {
+      "post": {
+        "operationId": "change_password_api_v1_auth_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Bad Request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Change your password; ends your other sessions",
         "tags": [
           "auth"
         ]
@@ -1437,6 +1562,91 @@
           }
         },
         "summary": "Change a user's role or disable them (admin)",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/api/v1/users/{user_id}/password": {
+      "post": {
+        "operationId": "reset_password_api_v1_users__user_id__password_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set a user's password and end their sessions (admin)",
         "tags": [
           "users"
         ]

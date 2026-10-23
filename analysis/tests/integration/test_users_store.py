@@ -43,6 +43,14 @@ async def test_user_queries(postgres_url):
         assert updated.role == "admin" and updated.is_active is False
         assert await store.update_user("missing", {"role": "admin"}) is None
 
+        assert alice.token_version == 0  # migration 0003 default
+        changed = await store.set_password(alice.id, "hash-new")
+        assert changed.password_hash == "hash-new" and changed.token_version == 1
+        assert (await store.bump_token_version(alice.id)).token_version == 2
+        assert (await store.get_user(alice.id)).token_version == 2
+        assert await store.set_password("missing", "h") is None
+        assert await store.bump_token_version("missing") is None
+
         now = datetime.now(UTC)
         await store.record_login(alice.id, now)
         assert (await store.get_user(alice.id)).last_login_at == now

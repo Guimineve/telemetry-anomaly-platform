@@ -263,6 +263,24 @@ class Store:
                 setattr(row, key, value)
             return row
 
+    async def set_password(self, user_id: str, password_hash: str) -> UserRow | None:
+        """Replace the password and end every existing session of that user."""
+        async with self._sessions.begin() as s:
+            row = await s.get(UserRow, user_id)
+            if row is None:
+                return None
+            row.password_hash = password_hash
+            row.token_version += 1
+            return row
+
+    async def bump_token_version(self, user_id: str) -> UserRow | None:
+        """End every existing session of that user."""
+        async with self._sessions.begin() as s:
+            row = await s.get(UserRow, user_id)
+            if row is not None:
+                row.token_version += 1
+            return row
+
     async def record_login(self, user_id: str, now: datetime) -> None:
         async with self._sessions.begin() as s:
             row = await s.get(UserRow, user_id)

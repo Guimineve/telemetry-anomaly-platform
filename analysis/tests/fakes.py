@@ -93,6 +93,7 @@ class FakeStore:
             password_hash=password_hash,
             role=role,
             is_active=True,
+            token_version=0,
             created_at=datetime.now(UTC),
             last_login_at=None,
         )
@@ -113,6 +114,19 @@ class FakeStore:
         if row is not None:
             for k, v in data.items():
                 setattr(row, k, v)
+        return row
+
+    async def set_password(self, user_id, password_hash):
+        row = self.users.get(user_id)
+        if row is not None:
+            row.password_hash = password_hash
+            row.token_version += 1
+        return row
+
+    async def bump_token_version(self, user_id):
+        row = self.users.get(user_id)
+        if row is not None:
+            row.token_version += 1
         return row
 
     async def record_login(self, user_id, now):

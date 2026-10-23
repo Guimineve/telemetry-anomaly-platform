@@ -54,6 +54,15 @@ function backend(me: User | null) {
       session ? json({ items: [], total: 0, limit: 25, offset: 0 }) : json({ detail: "x" }, 401),
     "/api/v1/rules": () => json([rule]),
     "/api/v1/users": () => json([admin, viewer]),
+    "/api/v1/auth/password": (_m, body) =>
+      (body as { currentPassword: string }).currentPassword === "right-password"
+        ? new Response(null, { status: 204 })
+        : json({ detail: "current password is wrong" }, 400),
+    "/api/v1/auth/logout-all": () => {
+      session = null;
+      return new Response(null, { status: 204 });
+    },
+    "/api/v1/users/u1/password": () => new Response(null, { status: 204 }),
   };
 }
 
@@ -157,5 +166,50 @@ describe("login flow", () => {
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Log in" })).toBeInTheDocument(),
     );
+  });
+});
+
+describe("account lifecycle", () => {
+  it("changes the password and reports a wrong current password", async () => {
+    backend(viewer);
+    renderApp();
+    await screen.findByText("vic · viewer");
+    const current = screen.getByLabelText("Current password");
+    const next = screen.getByLabelText("New password");
+    fireEvent.change(current, { target: { value: "wrong" } });
+    fireEvent.change(next, { target: { value: "a-new-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("current password is wrong");
+
+    fireEvent.change(current, { target: { value: "right-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change password" }));
+    expect(await screen.findByText(/other sessions were logged out/)).toBeInTheDocument();
+    expect(calls.filter((c) => c.url === "/api/v1/auth/password").at(-1)?.body).toEqual({
+      currentPassword: "right-password",
+      newPassword: "a-new-password",
+    });
+  });
+
+  it("logs out everywhere and returns to the login page", async () => {
+    backend(viewer);
+    renderApp();
+    fireEvent.click(await screen.findByRole("button", { name: "Log out everywhere" }));
+    expect(await screen.findByRole("heading", { name: "Log in" })).toBeInTheDocument();
+    expect(calls.some((c) => c.url === "/api/v1/auth/logout-all" && c.method === "POST")).toBe(true);
+  });
+
+  it("lets an admin reset another user's password", async () => {
+    backend(admin);
+    renderApp();
+    await screen.findByText("root · admin");
+    fireEvent.click(await screen.findByRole("button", { name: "Reset password" }));
+    fireEvent.change(screen.getByLabelText("New password for vic"), {
+      target: { value: "reset-password-123" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByText(/Password for vic was reset/)).toBeInTheDocument();
+    expect(calls.find((c) => c.url === "/api/v1/users/u1/password")?.body).toEqual({
+      newPassword: "reset-password-123",
+    });
   });
 });

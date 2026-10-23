@@ -92,6 +92,7 @@ curl -b /tmp/telemetry.cookies -X POST localhost:3000/api/v1/rules -H 'content-t
 - The first admin comes from `ADMIN_USERNAME` / `ADMIN_PASSWORD`. It is created at startup only if no user has that name, so changing the variable later does not reset an existing password. Sign-up never creates an admin; an admin promotes users.
 - Logging in sets an `HttpOnly`, `SameSite=Strict` cookie holding a JWT (HS256, signed with `JWT_SECRET`, 8 h by default) with only the user id in it. The user is loaded on every request, so a role change or a disabled account takes effect immediately. `COOKIE_SECURE` (`auto`, `true`, `false`) controls the `Secure` flag.
 - Passwords are hashed with argon2id. Login answers the same way for an unknown user and a wrong password, and five failures per minute for a username or client IP returns 429.
+- Each session token carries the user's session version. Changing your password (which needs the current one), "log out everywhere", an admin password reset and disabling a user all bump it, ending every earlier session; a password change keeps the current one.
 - Every `/api/v1` route and `/ws/alerts` needs the session. The WebSocket also refuses a browser `Origin` that does not match the host. `/health`, `/ready`, `/docs` and `/openapi.json` stay public.
 - The service refuses to start with a `JWT_SECRET` shorter than 32 characters.
 - The web container sends `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy` on every response, hides its nginx version, and gives the app page a strict `Content-Security-Policy` (same-origin scripts, styles and connections only). `/docs` is excluded from the CSP because Swagger UI loads from a CDN. Behind a TLS-terminating ingress (`X-Forwarded-Proto: https`) it also sends HSTS and passes the scheme on, so the session cookie gets the `Secure` flag.
@@ -176,9 +177,8 @@ This is one machine shape and a handful of runs, with the first run including JV
 - Single-broker Kafka, single-instance databases, no TLS between services (only at the cloud overlay's ingress), development passwords and a development `JWT_SECRET`. The Kubernetes manifests are a working local demo, not a hardened deployment.
 - Kafka, MongoDB and PostgreSQL have no authentication of their own; they are reachable only from the services that use them (network policies in Kubernetes, `127.0.0.1`-only ports in compose). The simulator's fault API needs a bearer token (`SIMULATOR_TOKEN`) and is refused when none is set. Ingestion's Actuator (health, metrics) is on a separate port, 8081, with no Kubernetes Service.
 - Anyone who can reach the app can create a viewer account and read alerts.
-- A session cannot be revoked before it expires except by disabling the user (or changing `JWT_SECRET`, which logs everyone out). An open WebSocket keeps receiving alerts until it reconnects, even after the session expires or the user is disabled.
+- An open WebSocket keeps receiving alerts until it reconnects, even after its session is ended.
 - The login rate limit is kept in memory per analysis replica and resets on restart. It is keyed partly on the client IP from `X-Forwarded-For`, which a client can forge when it reaches port 8000 directly instead of through the web container; the per-username limit still applies. An attacker can also lock a known username out for a minute at a time.
-- There is no password change or reset yet; an admin can disable an account but not set its password.
 - Rules are created through the REST API; in the UI admins can only enable, disable or delete them.
 
 ## Repository map

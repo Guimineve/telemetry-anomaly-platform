@@ -32,18 +32,20 @@ def test_password_hash_roundtrip():
 def test_token_roundtrip_expiry_and_forgery():
     now = [datetime(2026, 1, 1, tzinfo=UTC)]
     codec = TokenCodec(SECRET, ttl_s=60, clock=lambda: now[0])
-    token = codec.issue("user-1")
-    assert codec.decode(token) == "user-1"
+    token = codec.issue("user-1", version=3)
+    assert codec.decode(token) == ("user-1", 3)
     now[0] += timedelta(seconds=59)
-    assert codec.decode(token) == "user-1"
+    assert codec.decode(token) == ("user-1", 3)
     now[0] += timedelta(seconds=1)
     assert codec.decode(token) is None  # expired
 
     other = TokenCodec("another-secret-that-is-32-chars-long!", ttl_s=60, clock=lambda: now[0])
-    assert codec.decode(other.issue("user-1")) is None  # wrong signature
+    assert codec.decode(other.issue("user-1", 0)) is None  # wrong signature
     assert codec.decode("garbage") is None
-    no_sub = jwt.encode({"exp": 9_999_999_999}, SECRET, algorithm="HS256")
+    no_sub = jwt.encode({"exp": 9_999_999_999, "ver": 0}, SECRET, algorithm="HS256")
     assert codec.decode(no_sub) is None
+    no_ver = jwt.encode({"sub": "user-1", "exp": 9_999_999_999}, SECRET, algorithm="HS256")
+    assert codec.decode(no_ver) is None  # tokens from before session versions
     none_alg = jwt.encode({"sub": "user-1", "exp": 9_999_999_999}, None, algorithm="none")
     assert codec.decode(none_alg) is None
 
@@ -203,7 +205,7 @@ def test_forged_or_unknown_session_is_rejected():
     c = TestClient(app)
     c.cookies.set("session", "not-a-token")
     assert c.get("/api/v1/auth/me").status_code == 401
-    c.cookies.set("session", app.state.tokens.issue("no-such-user"))
+    c.cookies.set("session", app.state.tokens.issue("no-such-user", 0))
     assert c.get("/api/v1/auth/me").status_code == 401
 
 
@@ -297,6 +299,73 @@ def test_websocket_rejects_disabled_user():
     app, store = make_app()
     add_user(store, "alice").is_active = False
     c = TestClient(app)
-    c.cookies.set("session", app.state.tokens.issue(next(iter(store.users))))
+    c.cookies.set("session", app.state.tokens.issue(next(iter(store.users)), 0))
     with pytest.raises(WebSocketDisconnect), c.websocket_connect("/ws/alerts"):
         pass
+
+
+# -- account lifecycle -------------------------------------------------------
+NEW = "a-brand-new-password"
+
+
+def test_change_password_ends_other_sessions_and_keeps_this_one():
+    app, store = make_app()
+    add_user(store, "alice")
+    here, elsewhere = login(app, "alice"), login(app, "alice")
+
+    wrong = here.post(
+        "/api/v1/auth/password", json={"currentPassword": "nope-nope-nope", "newPassword": NEW}
+    )
+    assert wrong.status_code == 400
+    short = here.post(
+        "/api/v1/auth/password", json={"currentPassword": PASSWORD, "newPassword": "x"}
+    )
+    assert short.status_code == 422
+
+    r = here.post("/api/v1/auth/password", json={"currentPassword": PASSWORD, "newPassword": NEW})
+    assert r.status_code == 204, r.text
+    assert here.get("/api/v1/auth/me").status_code == 200  # fresh cookie for this session
+    assert elsewhere.get("/api/v1/auth/me").status_code == 401  # every other session ended
+    old = TestClient(app).post(
+        "/api/v1/auth/login", json={"username": "alice", "password": PASSWORD}
+    )
+    assert old.status_code == 401
+    login(app, "alice", NEW)
+
+
+def test_log_out_everywhere():
+    app, store = make_app()
+    add_user(store, "alice")
+    here, elsewhere = login(app, "alice"), login(app, "alice")
+    assert here.post("/api/v1/auth/logout-all").status_code == 204
+    assert here.get("/api/v1/auth/me").status_code == 401
+    assert elsewhere.get("/api/v1/auth/me").status_code == 401
+    assert TestClient(app).post("/api/v1/auth/logout-all").status_code == 401
+
+
+def test_admin_resets_a_password_and_ends_that_users_sessions():
+    app, store = make_app()
+    root = add_user(store, "root", role="admin")
+    vic = add_user(store, "vic")
+    admin, victim = login(app, "root"), login(app, "vic")
+
+    body = {"newPassword": NEW}
+    assert victim.post(f"/api/v1/users/{root.id}/password", json=body).status_code == 403
+    assert admin.post("/api/v1/users/nope/password", json=body).status_code == 404
+    too_short = {"newPassword": "x"}
+    assert admin.post(f"/api/v1/users/{vic.id}/password", json=too_short).status_code == 422
+    assert admin.post(f"/api/v1/users/{vic.id}/password", json=body).status_code == 204
+    assert victim.get("/api/v1/auth/me").status_code == 401
+    login(app, "vic", NEW)
+    # admins change their own password through /auth/password, which checks the current one
+    assert admin.post(f"/api/v1/users/{root.id}/password", json=body).status_code == 409
+
+
+def test_disabling_a_user_ends_their_sessions_even_after_re_enabling():
+    app, store = make_app()
+    add_user(store, "root", role="admin")
+    vic = add_user(store, "vic")
+    admin, victim = login(app, "root"), login(app, "vic")
+    assert admin.patch(f"/api/v1/users/{vic.id}", json={"isActive": False}).status_code == 200
+    assert admin.patch(f"/api/v1/users/{vic.id}", json={"isActive": True}).status_code == 200
+    assert victim.get("/api/v1/auth/me").status_code == 401  # old session stays dead

@@ -641,7 +641,7 @@ From the README, plus why each exists:
 | Rate/z-score windows are in memory | Simplicity | Rebuild from a compacted topic or Redis |
 | At-least-once → possible duplicate alert row | No transactional outbox | Deterministic alert ids + `ON CONFLICT DO NOTHING` |
 | Single-broker Kafka, single-instance DBs, no TLS, dev passwords and JWT secret | Demo scope | Replication, mTLS/SASL, secret manager |
-| Sessions can't be revoked except by disabling the user; open WebSockets outlive the session | Stateless JWT | Short token + refresh token, or a token version column checked on each request; periodic re-check on sockets |
+| Open WebSockets outlive the session until they reconnect | Checked only at the handshake | Periodic re-check on sockets, or close them when the session version changes |
 | Login rate limit is per replica | Simplicity | Shared limiter in Redis or PostgreSQL |
 | UI only lists rules | Scope | Add create/edit forms |
 | Multi-replica analysis untested | Time | Add a test with two replicas and a rebalance |
