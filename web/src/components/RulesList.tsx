@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { deleteRule, fetchRules, replaceRule } from "../api";
 import type { Rule } from "../types";
+import { SeverityBadge } from "./icons";
 
 export function RulesList({ canEdit }: { canEdit: boolean }) {
   const [rules, setRules] = useState<Rule[]>([]);
@@ -22,22 +23,29 @@ export function RulesList({ canEdit }: { canEdit: boolean }) {
   };
 
   return (
-    <section aria-labelledby="rules-heading">
-      <h2 id="rules-heading">Rules</h2>
+    <section className="card" aria-labelledby="rules-heading">
+      <div className="card-head">
+        <h2 id="rules-heading">Rules</h2>
+        <span className="count">{rules.length}</span>
+      </div>
       {error && <p role="alert" className="error">Could not load rules: {error}</p>}
       <ul className="rules">
         {rules.map((r) => (
           <li key={r.id} className={r.enabled ? "" : "disabled"}>
-            <strong>{r.name}</strong> <span className="badge">{r.type}</span>{" "}
-            <span className="muted">
-              {r.metric ?? "heartbeat"} · {r.devicePattern} · {JSON.stringify(r.params)}
-            </span>
+            <strong>{r.name}</strong>
+            <span className="badge">{r.type.replace(/_/g, " ")}</span>
+            <SeverityBadge severity={r.severity} />
+            {!r.enabled && <span className="badge">disabled</span>}
             {canEdit && (
               <span className="rule-actions">
-                <button onClick={() => void run(replaceRule({ ...r, enabled: !r.enabled }))}>
+                <button
+                  className="small"
+                  onClick={() => void run(replaceRule({ ...r, enabled: !r.enabled }))}
+                >
                   {r.enabled ? "Disable" : "Enable"}
                 </button>
                 <button
+                  className="small danger"
                   onClick={() => {
                     if (window.confirm(`Delete rule "${r.name}"? Its alert history is kept.`)) {
                       void run(deleteRule(r.id));
@@ -48,6 +56,9 @@ export function RulesList({ canEdit }: { canEdit: boolean }) {
                 </button>
               </span>
             )}
+            <span className="rule-meta">
+              {r.metric ?? "heartbeat"} · {r.devicePattern} · {JSON.stringify(r.params)}
+            </span>
           </li>
         ))}
       </ul>

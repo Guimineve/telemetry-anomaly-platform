@@ -5,6 +5,7 @@ import { HistoryTable } from "./components/HistoryTable";
 import { LoginPage } from "./components/LoginPage";
 import { RulesList } from "./components/RulesList";
 import { UsersAdmin } from "./components/UsersAdmin";
+import { Logo } from "./components/icons";
 import type { User } from "./types";
 import { useAlertStream } from "./useAlertStream";
 
@@ -12,7 +13,7 @@ export function App() {
   const { user, loading } = useAuth();
   if (loading) {
     return (
-      <main>
+      <main className="page">
         <p className="muted">Loading…</p>
       </main>
     );
@@ -35,22 +36,38 @@ function Dashboard({ user }: { user: User }) {
   const isAdmin = user.role === "admin";
 
   return (
-    <main>
-      <header className="top">
-        <h1>Telemetry alerts</h1>
-        <span className="muted">
-          {user.username} · {user.role}
-        </span>
-        <button onClick={() => void logout()}>Log out</button>
-      </header>
-      <div className="grid">
-        <AlertFeed alerts={alerts} status={status} />
-        <div>
-          <HistoryTable refreshKey={refreshKey} />
-          <RulesList canEdit={isAdmin} />
-          {isAdmin && <UsersAdmin me={user} />}
+    <>
+      <header className="topbar">
+        <div className="topbar-inner">
+          <div className="brand">
+            <Logo />
+            <h1>
+              Telemetry <span>alerts</span>
+            </h1>
+          </div>
+          <div className="user-chip">
+            <span className="avatar" aria-hidden="true">
+              {user.username.slice(0, 1)}
+            </span>
+            <span className="user-name">
+              {user.username} · {user.role}
+            </span>
+          </div>
+          <button className="ghost" onClick={() => void logout()}>
+            Log out
+          </button>
         </div>
-      </div>
-    </main>
+      </header>
+      <main className="page">
+        <div className="grid">
+          <AlertFeed alerts={alerts} status={status} />
+          <div className="stack">
+            <HistoryTable refreshKey={refreshKey} />
+            <RulesList canEdit={isAdmin} />
+            {isAdmin && <UsersAdmin me={user} />}
+          </div>
+        </div>
+      </main>
+    </>
   );
 }
