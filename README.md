@@ -24,7 +24,7 @@ flowchart LR
 | Component | Tech | What it does |
 |---|---|---|
 | [simulator/](simulator) | Python, aiokafka, FastAPI | Several devices (temperature, voltage, pressure, heartbeat) with noise. HTTP control port to inject `drift`, `spike`, `dropout` and `malformed` faults. |
-| [ingestion/](ingestion) | Java 21, Spring Boot 3.5, Spring Kafka | Validates each message against [the JSON Schema contract](contracts/reading.schema.json). Valid readings are upserted into MongoDB (keyed by reading id, so redelivery is idempotent) and forwarded; invalid ones go to the dead-letter topic with a `reason` header. |
+| [ingestion/](ingestion) | Java 21, Spring Boot 4.1, Spring Kafka | Validates each message against [the JSON Schema contract](contracts/reading.schema.json). Valid readings are upserted into MongoDB (keyed by reading id, so redelivery is idempotent) and forwarded; invalid ones go to the dead-letter topic with a `reason` header. |
 | [analysis/](analysis) | Python, FastAPI, SQLAlchemy, Alembic | Pure rules engine (below), Kafka worker, REST API, WebSocket, users and login. Rules, alert history and users live in PostgreSQL. |
 | [web/](web) | React, Vite, TypeScript | Login and sign-up, live alert feed, filterable history with acknowledge, rules list, user management for admins. |
 | [deploy/k8s/](deploy/k8s) | Kustomize | Manifests for everything, with a kind overlay. |

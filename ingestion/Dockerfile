@@ -8,8 +8,10 @@ COPY ingestion/src ./ingestion/src
 RUN mvn -q -B -f ingestion/pom.xml package -DskipTests
 
 FROM eclipse-temurin:21-jre
+# pebble (Canonical's service manager) ships in the base image but is never run here; removing it
+# drops a Go binary that vulnerability scans flag
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && rm -rf /var/lib/apt/lists/* \
+    && rm -rf /var/lib/apt/lists/* /usr/bin/pebble \
     && useradd --system --uid 10001 app
 WORKDIR /app
 COPY --from=build /build/ingestion/target/ingestion.jar app.jar

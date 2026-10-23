@@ -247,10 +247,10 @@ A subtle point: the schema validates the *pattern* of the timestamp, but a strin
 ### `pom.xml` / tools
 
 - **Maven + `spring-boot-starter-parent`**: dependency management (versions are aligned by the parent).
-- **spring-boot-starter-web**: embedded Tomcat for the Actuator endpoints.
+- **spring-boot-starter-webmvc**: embedded Tomcat for the Actuator endpoints (Spring Boot 4 splits starters per module).
 - **spring-boot-starter-actuator**: health + metrics.
 - **spring-boot-starter-data-mongodb**: `MongoTemplate`, `BulkOperations`.
-- **spring-kafka**: `@KafkaListener`, `KafkaTemplate`, `DefaultErrorHandler`.
+- **spring-boot-starter-kafka** (Spring Kafka 4): `@KafkaListener`, `KafkaTemplate`, `DefaultErrorHandler`.
 - **com.networknt:json-schema-validator**: JSON Schema validation in Java.
 - **Testcontainers (kafka, mongodb, junit-jupiter) + Awaitility**: real brokers/DBs in tests; Awaitility polls for async outcomes instead of `Thread.sleep`.
 - **maven-failsafe-plugin**: runs `*IT` integration tests in the `verify` phase, separate from unit tests (surefire).
@@ -690,7 +690,7 @@ From the README, plus why each exists:
 | **pytest / pytest-asyncio** | Testing | Python tests incl. async |
 | **React 18** | UI | Components and hooks |
 | **ruff** | Quality | Lint (E, F, I, UP, B rules) |
-| **Spring Boot 3.5 / Spring Kafka / Spring Data MongoDB** | Java | Framework, listener containers, Mongo templates |
+| **Spring Boot 4.1 / Spring Kafka / Spring Data MongoDB** | Java | Framework, listener containers, Mongo templates |
 | **SQLAlchemy 2 (async)** | DB | ORM / query builder |
 | **Testcontainers** | Testing | Real Kafka/Mongo/Postgres in tests |
 | **Trivy** | Security | Image vulnerability scanning (non-blocking) |

@@ -19,9 +19,8 @@ spring:
     listener:
       type: batch
       ack-mode: manual
-  data:
-    mongodb:
-      uri: ${MONGO_URI:mongodb://localhost:27017/telemetry}
+  mongodb:
+    uri: ${MONGO_URI:mongodb://localhost:27017/telemetry}
 
 telemetry:
   topics:
