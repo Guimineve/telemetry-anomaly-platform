@@ -74,10 +74,10 @@ describe("useAlertStream", () => {
 
   it("shows alerts pushed over the socket", () => {
     render(<Probe />);
-    expect(screen.getByText("connecting")).toBeInTheDocument();
+    expect(screen.getByText("Connecting…")).toBeInTheDocument();
     const sock = FakeSocket.instances[0];
     act(() => sock.onopen?.());
-    expect(screen.getByText("open")).toBeInTheDocument();
+    expect(screen.getByText("Live")).toBeInTheDocument();
     act(() => sock.onmessage?.({ data: JSON.stringify(alert("a1")) }));
     expect(screen.getByText("temperature 95 above max 60")).toBeInTheDocument();
     expect(screen.getByText("sensor-001")).toBeInTheDocument();
@@ -95,7 +95,7 @@ describe("useAlertStream", () => {
   it("reconnects with backoff after the connection drops", () => {
     render(<Probe />);
     act(() => FakeSocket.instances[0].onclose?.());
-    expect(screen.getByText("closed")).toBeInTheDocument();
+    expect(screen.getByText("Reconnecting…")).toBeInTheDocument();
     expect(FakeSocket.instances).toHaveLength(1);
     act(() => vi.advanceTimersByTime(1000));
     expect(FakeSocket.instances).toHaveLength(2);
