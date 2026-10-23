@@ -127,8 +127,53 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           push: false
+          load: true
+          tags: scan/${{ matrix.name }}:ci
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
+      # Fails on HIGH/CRITICAL vulnerabilities that have a fix available. Unfixed ones are
+      # reported in the table but cannot be acted on, so they do not block.
+      - name: Scan the image for known vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: scan/${{ matrix.name }}:ci
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+      - name: Software bill of materials (CycloneDX)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: scan/${{ matrix.name }}:ci
+          format: cyclonedx
+          output: sbom-${{ matrix.name }}.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.name }}
+          path: sbom-${{ matrix.name }}.cdx.json
+
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: pip install pip-audit
+      - name: Python dependencies with known vulnerabilities (runtime deps of each service)
+        run: |
+          pip-audit --progress-spinner off analysis
+          pip-audit --progress-spinner off simulator
+      - name: npm dependencies with known high or critical vulnerabilities
+        working-directory: web
+        run: |
+          npm ci --no-audit --no-fund
+          npm audit --audit-level=high
 
   secrets-scan:
     runs-on: ubuntu-latest

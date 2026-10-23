@@ -140,6 +140,7 @@ Everything below runs in GitHub Actions on every push ([ci.yml](.github/workflow
 | Web | 16 vitest tests (WebSocket reconnect/backoff, de-duplication, query building, login/sign-up/logout, return to login on 401, admin-only controls), type-check and production build. |
 | End to end | [scripts/smoke.py](scripts/smoke.py) runs against the full compose stack and, again, against a kind cluster. It logs in as the admin, checks that requests without a session are refused and that a newly registered viewer cannot change rules, then injects a spike and asserts exactly one threshold alert, seen both on the WebSocket and in the REST history; then malformed messages (rejected) and a dropout (silent-device alert opens, then resolves). |
 | Images and manifests | All four images are built; manifests are validated with kubeconform; the kind job deploys them. CD re-runs the kind smoke test on the images it just published to GHCR. |
+| Supply chain | Each image is scanned with Trivy and the build fails on HIGH or CRITICAL vulnerabilities that have a fix; a CycloneDX SBOM per image is kept as a build artifact. `pip-audit` and `npm audit` check dependencies, gitleaks checks the history for secrets. Published images are signed with cosign (keyless, GitHub OIDC) and CD verifies the signatures before deploying them. Third-party actions added for this are pinned to commit SHAs. |
 
 Not tested: more than one analysis replica, any real hardware, long runs, security.
 
