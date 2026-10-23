@@ -78,6 +78,27 @@ async def login(username: str, password: str) -> str:
     return r.cookies["session"]
 
 
+async def check_headers() -> None:
+    """The web container sends security headers; the app page gets a strict CSP."""
+    async with httpx.AsyncClient(timeout=10) as anon:
+        page = await anon.get(f"{WEB}/")
+        api = await anon.get(f"{WEB}/api/v1/auth/me")
+    for name, r in (("page", page), ("api", api)):
+        for header, value in (
+            ("x-content-type-options", "nosniff"),
+            ("x-frame-options", "DENY"),
+            ("referrer-policy", "strict-origin-when-cross-origin"),
+        ):
+            if r.headers.get(header) != value:
+                fail(f"{name}: {header} is {r.headers.get(header)!r}, expected {value!r}")
+    csp = page.headers.get("content-security-policy", "")
+    if "default-src 'self'" not in csp or "frame-ancestors 'none'" not in csp:
+        fail(f"page CSP missing or weak: {csp!r}")
+    if "nginx/" in page.headers.get("server", ""):
+        fail("nginx version is exposed in the Server header")
+    log("security headers present")
+
+
 async def check_auth() -> None:
     async with httpx.AsyncClient(timeout=10) as anon:
         r = await anon.get(f"{WEB}/api/v1/alerts")
@@ -120,6 +141,7 @@ async def main() -> None:
     token = await wait_until("admin login", lambda: login(*ADMIN), 90)
     session = {"Cookie": f"session={token}"}
     await check_auth()
+    await check_headers()
 
     async with httpx.AsyncClient(timeout=10, headers=session) as http:
         rules = (await http.get(f"{WEB}/api/v1/rules")).json()
