@@ -5,7 +5,7 @@ RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 
-FROM nginxinc/nginx-unprivileged:1.27-alpine
+FROM nginxinc/nginx-unprivileged:1.30-alpine
 ENV ANALYSIS_UPSTREAM=http://analysis:8000
 COPY nginx.conf.template /etc/nginx/templates/default.conf.template
 COPY security-headers.conf /etc/nginx/snippets/security-headers.conf
