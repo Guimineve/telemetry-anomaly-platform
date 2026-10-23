@@ -44,7 +44,7 @@ done
 
 kubectl -n telemetry port-forward svc/web 3000:80 >/dev/null 2>&1 & PIDS+=($!)
 kubectl -n telemetry port-forward svc/simulator 8001:8001 >/dev/null 2>&1 & PIDS+=($!)
-kubectl -n telemetry port-forward svc/ingestion 8080:8080 >/dev/null 2>&1 & PIDS+=($!)
+kubectl -n telemetry port-forward deploy/ingestion 8081:8081 >/dev/null 2>&1 & PIDS+=($!)
 sleep 3
 
 probe() {  # probe <labels> <host> <port>: can a pod with these labels open the connection?

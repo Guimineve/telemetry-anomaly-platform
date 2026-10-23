@@ -14,5 +14,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl \
 WORKDIR /app
 COPY --from=build /build/ingestion/target/ingestion.jar app.jar
 USER 10001
-EXPOSE 8080
+EXPOSE 8080 8081
 ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "app.jar"]

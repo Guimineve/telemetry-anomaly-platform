@@ -24,8 +24,9 @@ import websockets
 
 WEB = os.getenv("WEB_URL", "http://localhost:3000")
 SIM = os.getenv("SIM_URL", "http://localhost:8001")
-INGEST = os.getenv("INGEST_URL", "http://localhost:8080")
+INGEST = os.getenv("INGEST_URL", "http://localhost:8081")  # Actuator port
 WS = WEB.replace("http", "ws", 1) + "/ws/alerts"
+SIM_AUTH = {"Authorization": f"Bearer {os.getenv('SIMULATOR_TOKEN', 'simulator-dev-token')}"}
 ADMIN = (os.getenv("ADMIN_USERNAME", "admin"), os.getenv("ADMIN_PASSWORD", "admin-dev-password"))
 
 
@@ -139,11 +140,14 @@ async def check_auth() -> None:
             fail(f"viewer created a rule: {r.status_code}, expected 403")
         if (await anon.get(f"{WEB}/api/v1/alerts", headers=viewer)).status_code != 200:
             fail("viewer could not read alerts")
+        fault = {"kind": "spike", "deviceId": "sensor-001"}
+        if (await anon.post(f"{SIM}/faults", json=fault)).status_code != 401:
+            fail("simulator accepted a fault without its token")
     log("auth: anonymous requests refused, new viewer can read but not change rules")
 
 
 async def post_fault(http: httpx.AsyncClient, **body) -> None:
-    r = await http.post(f"{SIM}/faults", json=body)
+    r = await http.post(f"{SIM}/faults", json=body, headers=SIM_AUTH)
     if r.status_code != 202:
         fail(f"simulator rejected fault {body}: {r.status_code} {r.text}")
 

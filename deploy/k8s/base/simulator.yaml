@@ -39,6 +39,8 @@ spec:
             - { name: KAFKA_BOOTSTRAP, value: "kafka:9092" }
             - { name: DEVICES, value: "5" }
             - { name: TICK_INTERVAL_S, value: "1.0" }
+            - name: SIMULATOR_TOKEN
+              valueFrom: { secretKeyRef: { name: simulator-auth, key: SIMULATOR_TOKEN } }
           livenessProbe:
             httpGet: { path: /health, port: 8001 }
             periodSeconds: 10
