@@ -90,6 +90,7 @@ curl -b /tmp/telemetry.cookies -X POST localhost:3000/api/v1/rules -H 'content-t
 - Passwords are hashed with argon2id. Login answers the same way for an unknown user and a wrong password, and five failures per minute for a username or client IP returns 429.
 - Every `/api/v1` route and `/ws/alerts` needs the session. The WebSocket also refuses a browser `Origin` that does not match the host. `/health`, `/ready`, `/docs` and `/openapi.json` stay public.
 - The service refuses to start with a `JWT_SECRET` shorter than 32 characters.
+- The web container sends `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy` on every response, hides its nginx version, and gives the app page a strict `Content-Security-Policy` (same-origin scripts, styles and connections only). `/docs` is excluded from the CSP because Swagger UI loads from a CDN. HSTS belongs at a TLS-terminating ingress, which this repo does not have yet.
 
 The API is documented in [docs/openapi.json](docs/openapi.json), generated from the code and checked for drift in tests and CI.
 
