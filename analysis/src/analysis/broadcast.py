@@ -13,7 +13,7 @@ from typing import Protocol
 
 from aiokafka import AIOKafkaConsumer
 
-from .worker import retry_forever
+from .worker import METADATA_MAX_AGE_MS, retry_forever
 
 log = logging.getLogger("analysis.broadcast")
 
@@ -51,6 +51,7 @@ class Broadcaster:
             group_id=f"ws-{uuid.uuid4().hex}",
             enable_auto_commit=False,
             auto_offset_reset="latest",
+            metadata_max_age_ms=METADATA_MAX_AGE_MS,
         )
         await retry_forever("start broadcaster consumer", self._consumer.start)
         self._consumer.subscribe([topic])
