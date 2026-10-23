@@ -107,6 +107,18 @@ KEEP_CLUSTER=1 scripts/kind-e2e.sh telemetry- dev     # create cluster, deploy, 
 # the web UI is then on http://localhost:3000 (NodePort 30080 mapped by deploy/k8s/overlays/kind/kind-config.yaml)
 ```
 
+### Deploying to a cloud cluster
+
+[deploy/k8s/overlays/cloud](deploy/k8s/overlays/cloud) is a provider-neutral overlay. `deploy/k8s/base` contains no secret values: the kind overlay adds development Secrets, and the cloud overlay creates them with [External Secrets Operator](https://external-secrets.io) from your provider's secret manager.
+
+1. Install External Secrets Operator and create a `ClusterSecretStore` named `telemetry-secrets` for your provider (AWS Secrets Manager, Google Secret Manager, Azure Key Vault, Vault, ...).
+2. Create two secrets there, each a JSON object:
+   - `telemetry/postgres`: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
+   - `telemetry/analysis-auth`: `JWT_SECRET` (32+ random characters), `ADMIN_USERNAME`, `ADMIN_PASSWORD` (10+ characters)
+3. `kubectl apply -k deploy/k8s/overlays/cloud` (images come from GHCR).
+
+This overlay has been validated against the Kubernetes schemas in CI but not deployed to a real cloud cluster. Ingress and TLS are not part of it yet.
+
 ## How it was tested
 
 Everything below runs in GitHub Actions on every push ([ci.yml](.github/workflows/ci.yml)). Counts are as of the last milestone.

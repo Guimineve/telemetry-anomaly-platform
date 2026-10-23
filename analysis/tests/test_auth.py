@@ -10,11 +10,12 @@ from analysis.auth.ratelimit import AttemptLimiter
 from analysis.auth.tokens import TokenCodec
 from analysis.config import Settings
 from analysis.db import RuleRow
-from analysis.main import bootstrap_admin, check_auth_settings
+from analysis.main import bootstrap_admin, check_settings
 
 from .fakes import FakeStore
 from .helpers import PASSWORD, SECRET, add_user, login, make_app
 
+DB = "postgresql+asyncpg://u:p@db/x"
 RULE = {"name": "t", "type": "threshold", "metric": "temperature", "params": {"max": 60}}
 
 
@@ -68,16 +69,19 @@ def test_attempt_limiter_window_and_reset():
         ({"admin_username": "admin"}, "both"),
         ({"admin_username": "admin", "admin_password": "short"}, "ADMIN_PASSWORD"),
         ({"cookie_secure": "maybe"}, "COOKIE_SECURE"),
+        ({"database_url": ""}, "DATABASE_URL"),
     ],
 )
 def test_bad_auth_settings_fail_fast(overrides, message):
     with pytest.raises(RuntimeError, match=message):
-        check_auth_settings(Settings(**{"jwt_secret": SECRET, **overrides}))
+        check_settings(Settings(**{"jwt_secret": SECRET, "database_url": DB, **overrides}))
 
 
 def test_good_auth_settings_pass():
-    check_auth_settings(Settings(jwt_secret=SECRET))
-    check_auth_settings(Settings(jwt_secret=SECRET, admin_username="a", admin_password=PASSWORD))
+    check_settings(Settings(jwt_secret=SECRET, database_url=DB))
+    check_settings(
+        Settings(jwt_secret=SECRET, database_url=DB, admin_username="a", admin_password=PASSWORD)
+    )
 
 
 async def test_bootstrap_admin_creates_once_and_never_overwrites():

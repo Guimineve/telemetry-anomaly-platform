@@ -1,0 +1,14 @@
+# Provider-neutral overlay for a managed cluster. Prerequisites (installed separately):
+#   - External Secrets Operator, with a ClusterSecretStore named `telemetry-secrets` pointing at
+#     your provider's secret manager (see README "Deploying to a cloud cluster")
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: telemetry
+resources:
+  - ../../base
+  - external-secrets.yaml
+images:
+  - { name: telemetry-simulator, newName: ghcr.io/guimineve/telemetry-simulator, newTag: latest }
+  - { name: telemetry-ingestion, newName: ghcr.io/guimineve/telemetry-ingestion, newTag: latest }
+  - { name: telemetry-analysis, newName: ghcr.io/guimineve/telemetry-analysis, newTag: latest }
+  - { name: telemetry-web, newName: ghcr.io/guimineve/telemetry-web, newTag: latest }
