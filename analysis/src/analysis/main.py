@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, status
 
+from .api.audit import audit_router
 from .api.auth_routes import auth_router, users_router
 from .api.deps import SESSION_COOKIE, user_from_token
 from .api.routes import router
@@ -107,6 +108,7 @@ def create_app(settings: Settings | None = None, run_worker: bool = True) -> Fas
     app.state.broadcaster = Broadcaster()
     app.include_router(auth_router)
     app.include_router(users_router)
+    app.include_router(audit_router)
     app.include_router(router)
 
     @app.websocket("/ws/alerts")

@@ -72,6 +72,23 @@ class UserRow(Base):
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class AuditRow(Base):
+    """One security-relevant event. Never holds passwords or tokens."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (Index("ix_audit_ts", "ts"), Index("ix_audit_action_ts", "action", "ts"))
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    actor_id: Mapped[str | None] = mapped_column(String(36), nullable=True)  # None: unknown user
+    actor_username: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    action: Mapped[str] = mapped_column(String(48))
+    target_type: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    target_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    detail: Mapped[dict] = mapped_column(JsonType, default=dict)
+
+
 def make_engine(url: str) -> AsyncEngine:
     return create_async_engine(url, pool_pre_ping=True)
 

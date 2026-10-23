@@ -7,7 +7,8 @@ from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
-from .deps import Store, current_user, require_admin
+from .audit import audit
+from .deps import Admin, Store, current_user, require_admin
 from .schemas import AlertOut, AlertPage, ErrorOut, RuleIn, RuleOut
 
 NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"model": ErrorOut}}
@@ -39,8 +40,17 @@ async def list_rules(store: Store):
     tags=["rules"],
     summary="Create a rule (admin)",
 )
-async def create_rule(body: RuleIn, store: Store, request: Request):
+async def create_rule(body: RuleIn, store: Store, request: Request, admin: Admin):
     row = await store.create_rule(body.model_dump())
+    await audit(
+        request,
+        store,
+        "rule.create",
+        actor=admin,
+        target_type="rule",
+        target_id=row.id,
+        detail={"name": row.name},
+    )
     await _rules_changed(request)
     return row
 
@@ -67,10 +77,19 @@ async def get_rule(rule_id: str, store: Store):
     tags=["rules"],
     summary="Replace a rule (admin)",
 )
-async def replace_rule(rule_id: str, body: RuleIn, store: Store, request: Request):
+async def replace_rule(rule_id: str, body: RuleIn, store: Store, request: Request, admin: Admin):
     row = await store.update_rule(rule_id, body.model_dump())
     if row is None:
         raise HTTPException(404, "rule not found")
+    await audit(
+        request,
+        store,
+        "rule.update",
+        actor=admin,
+        target_type="rule",
+        target_id=rule_id,
+        detail={"name": row.name},
+    )
     await _rules_changed(request)
     return row
 
@@ -83,9 +102,10 @@ async def replace_rule(rule_id: str, body: RuleIn, store: Store, request: Reques
     tags=["rules"],
     summary="Delete a rule, keeping its alert history (admin)",
 )
-async def delete_rule(rule_id: str, store: Store, request: Request):
+async def delete_rule(rule_id: str, store: Store, request: Request, admin: Admin):
     if not await store.delete_rule(rule_id):
         raise HTTPException(404, "rule not found")
+    await audit(request, store, "rule.delete", actor=admin, target_type="rule", target_id=rule_id)
     await _rules_changed(request)
     return Response(status_code=204)
 

@@ -63,6 +63,25 @@ function backend(me: User | null) {
       return new Response(null, { status: 204 });
     },
     "/api/v1/users/u1/password": () => new Response(null, { status: 204 }),
+    "/api/v1/audit": () =>
+      json({
+        items: [
+          {
+            id: "e1",
+            ts: "2026-01-01T10:00:00Z",
+            actorId: null,
+            actorUsername: "ghost",
+            action: "login.failure",
+            targetType: null,
+            targetId: null,
+            ip: "10.0.0.9",
+            detail: {},
+          },
+        ],
+        total: 1,
+        limit: 25,
+        offset: 0,
+      }),
   };
 }
 
@@ -211,5 +230,23 @@ describe("account lifecycle", () => {
     expect(calls.find((c) => c.url === "/api/v1/users/u1/password")?.body).toEqual({
       newPassword: "reset-password-123",
     });
+  });
+});
+
+describe("audit log", () => {
+  it("is shown to admins only", async () => {
+    backend(admin);
+    const { unmount } = renderApp();
+    expect(await screen.findByRole("heading", { name: "Audit log" })).toBeInTheDocument();
+    expect(await screen.findByText("ghost")).toBeInTheDocument();
+    expect(screen.getByText("10.0.0.9")).toBeInTheDocument();
+    unmount();
+
+    calls = [];
+    backend(viewer);
+    renderApp();
+    await screen.findByText("vic · viewer");
+    expect(screen.queryByRole("heading", { name: "Audit log" })).not.toBeInTheDocument();
+    expect(calls.some((c) => c.url.startsWith("/api/v1/audit"))).toBe(false); // never requested
   });
 });

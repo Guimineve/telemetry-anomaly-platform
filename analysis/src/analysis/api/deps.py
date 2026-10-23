@@ -8,7 +8,7 @@ from typing import Annotated, Any, Protocol
 from fastapi import Depends, HTTPException, Request
 
 from ..auth.tokens import TokenCodec
-from ..db import AlertRow, RuleRow, UserRow
+from ..db import AlertRow, AuditRow, RuleRow, UserRow
 
 SESSION_COOKIE = "session"
 
@@ -30,6 +30,8 @@ class ApiStore(Protocol):
     async def record_login(self, user_id: str, now: datetime) -> None: ...
     async def set_password(self, user_id: str, password_hash: str) -> UserRow | None: ...
     async def bump_token_version(self, user_id: str) -> UserRow | None: ...
+    async def record_event(self, **fields: Any) -> None: ...
+    async def list_events(self, **filters: Any) -> tuple[list[AuditRow], int]: ...
 
 
 def get_store(request: Request) -> ApiStore:
