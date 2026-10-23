@@ -8,6 +8,7 @@ interface Auth {
   login: (username: string, password: string) => Promise<void>;
   register: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  logoutEverywhere: () => Promise<void>;
 }
 
 const AuthContext = createContext<Auth | null>(null);
@@ -38,6 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } finally {
           setUser(null);
         }
+      },
+      logoutEverywhere: async () => {
+        await api.logoutAll();
+        setUser(null);
       },
     }),
     [user, loading],

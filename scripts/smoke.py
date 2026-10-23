@@ -140,6 +140,11 @@ async def check_auth() -> None:
             fail(f"viewer created a rule: {r.status_code}, expected 403")
         if (await anon.get(f"{WEB}/api/v1/alerts", headers=viewer)).status_code != 200:
             fail("viewer could not read alerts")
+        r = await anon.post(f"{WEB}/api/v1/auth/logout-all", headers=viewer)
+        if r.status_code != 204:
+            fail(f"log out everywhere failed: {r.status_code} {r.text}")
+        if (await anon.get(f"{WEB}/api/v1/auth/me", headers=viewer)).status_code != 401:
+            fail("session still valid after logging out everywhere")
         fault = {"kind": "spike", "deviceId": "sensor-001"}
         if (await anon.post(f"{SIM}/faults", json=fault)).status_code != 401:
             fail("simulator accepted a fault without its token")

@@ -165,6 +165,15 @@ class UserOut(ApiModel):
     last_login_at: datetime | None = None
 
 
+class PasswordChangeIn(ApiModel):
+    current_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=10, max_length=128)
+
+
+class PasswordResetIn(ApiModel):
+    new_password: str = Field(min_length=10, max_length=128)
+
+
 class UserPatch(ApiModel):
     role: Role | None = None
     is_active: bool | None = None

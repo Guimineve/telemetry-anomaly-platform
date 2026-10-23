@@ -9,8 +9,17 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from ..auth.passwords import hash_password, verify_password
+from ..db import UserRow
 from .deps import SESSION_COOKIE, Admin, CurrentUser, Store, require_admin
-from .schemas import ErrorOut, LoginIn, RegisterIn, UserOut, UserPatch
+from .schemas import (
+    ErrorOut,
+    LoginIn,
+    PasswordChangeIn,
+    PasswordResetIn,
+    RegisterIn,
+    UserOut,
+    UserPatch,
+)
 
 ERR = {"model": ErrorOut}
 auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -32,11 +41,10 @@ def _cookie_args(request: Request) -> dict[str, Any]:
     return {"path": "/", "httponly": True, "samesite": "strict", "secure": secure}
 
 
-def _start_session(request: Request, response: Response, user_id: str) -> None:
+def _start_session(request: Request, response: Response, user: UserRow) -> None:
     tokens = request.app.state.tokens
-    response.set_cookie(
-        SESSION_COOKIE, tokens.issue(user_id), max_age=tokens.ttl_s, **_cookie_args(request)
-    )
+    token = tokens.issue(user.id, user.token_version)
+    response.set_cookie(SESSION_COOKIE, token, max_age=tokens.ttl_s, **_cookie_args(request))
 
 
 @auth_router.post(
@@ -56,7 +64,7 @@ async def register(body: RegisterIn, request: Request, response: Response, store
     user = await store.create_user(body.username, password_hash, "viewer")
     if user is None:
         raise HTTPException(409, "username already taken")
-    _start_session(request, response, user.id)
+    _start_session(request, response, user)
     return user
 
 
@@ -83,12 +91,50 @@ async def login(body: LoginIn, request: Request, response: Response, store: Stor
     now = datetime.now(UTC)
     await store.record_login(user.id, now)
     user.last_login_at = now
-    _start_session(request, response, user.id)
+    _start_session(request, response, user)
     return user
 
 
 @auth_router.post("/logout", status_code=204, summary="Log out; clears the session cookie")
 async def logout(request: Request):
+    response = Response(status_code=204)
+    response.delete_cookie(SESSION_COOKIE, **_cookie_args(request))
+    return response
+
+
+@auth_router.post(
+    "/password",
+    status_code=204,
+    responses={400: ERR, 401: ERR, 429: ERR},
+    summary="Change your password; ends your other sessions",
+)
+async def change_password(
+    body: PasswordChangeIn, user: CurrentUser, request: Request, store: Store
+):
+    limiter = request.app.state.login_limiter
+    key = f"user:{user.username}"
+    if limiter.blocked(key):
+        raise HTTPException(429, "too many failed attempts; try again later")
+    ok = await asyncio.to_thread(verify_password, user.password_hash, body.current_password)
+    if not ok:
+        limiter.record(key)
+        raise HTTPException(400, "current password is wrong")
+    new_hash = await asyncio.to_thread(hash_password, body.new_password)
+    updated = await store.set_password(user.id, new_hash)
+    response = Response(status_code=204)
+    if updated is not None:
+        _start_session(request, response, updated)  # this session continues under the new version
+    return response
+
+
+@auth_router.post(
+    "/logout-all",
+    status_code=204,
+    responses={401: ERR},
+    summary="End every session of the current user, including this one",
+)
+async def logout_all(user: CurrentUser, request: Request, store: Store):
+    await store.bump_token_version(user.id)
     response = Response(status_code=204)
     response.delete_cookie(SESSION_COOKIE, **_cookie_args(request))
     return response
@@ -118,4 +164,21 @@ async def update_user(user_id: str, body: UserPatch, admin: Admin, store: Store)
     row = await store.update_user(user_id, data)
     if row is None:
         raise HTTPException(404, "user not found")
+    if data.get("is_active") is False:  # sessions stay dead even if the user is re-enabled later
+        row = await store.bump_token_version(user_id) or row
     return row
+
+
+@users_router.post(
+    "/{user_id}/password",
+    status_code=204,
+    responses={404: ERR, 409: ERR},
+    summary="Set a user's password and end their sessions (admin)",
+)
+async def reset_password(user_id: str, body: PasswordResetIn, admin: Admin, store: Store):
+    if user_id == admin.id:
+        raise HTTPException(409, "change your own password with /auth/password")
+    new_hash = await asyncio.to_thread(hash_password, body.new_password)
+    if await store.set_password(user_id, new_hash) is None:
+        raise HTTPException(404, "user not found")
+    return Response(status_code=204)

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./auth";
+import { AccountPanel } from "./components/AccountPanel";
 import { AlertFeed } from "./components/AlertFeed";
 import { HistoryTable } from "./components/HistoryTable";
 import { LoginPage } from "./components/LoginPage";
@@ -65,6 +66,7 @@ function Dashboard({ user }: { user: User }) {
             <HistoryTable refreshKey={refreshKey} />
             <RulesList canEdit={isAdmin} />
             {isAdmin && <UsersAdmin me={user} />}
+            <AccountPanel />
           </div>
         </div>
       </main>

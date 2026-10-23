@@ -83,6 +83,14 @@ export const register = (username: string, password: string): Promise<User> =>
 
 export const logout = (): Promise<void> => post<void>("/api/v1/auth/logout");
 
+export const logoutAll = (): Promise<void> => post<void>("/api/v1/auth/logout-all");
+
+export const changePassword = (currentPassword: string, newPassword: string): Promise<void> =>
+  post<void>("/api/v1/auth/password", { currentPassword, newPassword });
+
+export const resetPassword = (userId: string, newPassword: string): Promise<void> =>
+  post<void>(`/api/v1/users/${encodeURIComponent(userId)}/password`, { newPassword });
+
 export const fetchUsers = (): Promise<User[]> => request<User[]>("/api/v1/users");
 
 export const updateUser = (id: string, patch: Partial<Pick<User, "role" | "isActive">>) =>

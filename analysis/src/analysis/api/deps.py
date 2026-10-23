@@ -28,6 +28,8 @@ class ApiStore(Protocol):
     async def list_users(self) -> list[UserRow]: ...
     async def update_user(self, user_id: str, data: dict) -> UserRow | None: ...
     async def record_login(self, user_id: str, now: datetime) -> None: ...
+    async def set_password(self, user_id: str, password_hash: str) -> UserRow | None: ...
+    async def bump_token_version(self, user_id: str) -> UserRow | None: ...
 
 
 def get_store(request: Request) -> ApiStore:
@@ -39,11 +41,14 @@ Store = Annotated[ApiStore, Depends(get_store)]
 
 async def user_from_token(store: ApiStore, tokens: TokenCodec, token: str | None) -> UserRow | None:
     """The active user a session token belongs to, or None. Shared by HTTP and WebSocket."""
-    user_id = tokens.decode(token) if token else None
-    if user_id is None:
+    session = tokens.decode(token) if token else None
+    if session is None:
         return None
+    user_id, version = session
     user = await store.get_user(user_id)
-    return user if user is not None and user.is_active else None
+    if user is None or not user.is_active or user.token_version != version:
+        return None
+    return user
 
 
 async def current_user(request: Request, store: Store) -> UserRow:

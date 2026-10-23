@@ -333,6 +333,31 @@ tr.disabled td { opacity: 0.5; }
 .rule-actions { display: inline-flex; gap: 6px; margin-left: auto; }
 .card > small { display: block; margin-top: 10px; }
 
+/* -- account and inline forms ------------------------------------------------- */
+.inline-form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+.inline-form label { display: grid; gap: 4px; font-size: 0.75rem; font-weight: 600; color: var(--muted); }
+.inline-form input { color: var(--text); }
+.notice {
+  color: var(--accent-text);
+  background: var(--hover);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  margin: 10px 0 0;
+  font-size: 0.9rem;
+}
+.danger-zone {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.row-form, .row-actions { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.row-form input { width: 170px; padding: 4px 8px; color: var(--text); }
+
 /* -- login ------------------------------------------------------------------- */
 .auth { display: grid; grid-template-columns: 1.1fr 1fr; min-height: 100vh; }
 @media (max-width: 860px) { .auth { grid-template-columns: 1fr; } }
