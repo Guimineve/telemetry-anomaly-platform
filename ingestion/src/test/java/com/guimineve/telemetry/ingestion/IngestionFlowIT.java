@@ -24,9 +24,9 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MongoDBContainer;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.kafka.KafkaContainer;
+import org.testcontainers.mongodb.MongoDBContainer;
 import org.testcontainers.utility.DockerImageName;
 
 /** End to end through real Kafka and MongoDB: raw -> (validated | dlq) + Mongo. */
@@ -52,7 +52,7 @@ class IngestionFlowIT {
     @DynamicPropertySource
     static void props(DynamicPropertyRegistry r) {
         r.add("spring.kafka.bootstrap-servers", KAFKA::getBootstrapServers);
-        r.add("spring.data.mongodb.uri", () -> MONGO.getReplicaSetUrl("telemetry"));
+        r.add("spring.mongodb.uri", () -> MONGO.getReplicaSetUrl("telemetry"));
     }
 
     @Autowired KafkaTemplate<String, String> kafka;
