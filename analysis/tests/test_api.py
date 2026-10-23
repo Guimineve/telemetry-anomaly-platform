@@ -1,12 +1,8 @@
 from datetime import UTC, datetime
 
 import pytest
-from fastapi.testclient import TestClient
 
-from analysis.config import Settings
-from analysis.main import create_app
-
-from .fakes import FakeStore
+from .helpers import add_user, login, make_app
 
 THRESHOLD = {
     "name": "temp high",
@@ -19,17 +15,16 @@ THRESHOLD = {
 
 @pytest.fixture
 def env():
-    """App with routes and WebSocket but no lifespan (no Kafka, no Postgres)."""
-    app = create_app(Settings(), run_worker=False)
-    store = FakeStore()
-    app.state.store = store
+    """App with routes and WebSocket but no lifespan (no Kafka, no Postgres), logged in as admin."""
+    app, store = make_app()
+    add_user(store, "root", role="admin")
     changed = []
 
     async def on_change():
         changed.append(1)
 
     app.state.on_rules_changed = on_change
-    return TestClient(app), store, changed, app
+    return login(app, "root"), store, changed, app
 
 
 def test_rule_crud_roundtrip(env):

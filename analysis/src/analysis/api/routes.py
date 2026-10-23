@@ -1,35 +1,20 @@
-"""REST routes: rules CRUD and alert history."""
+"""REST routes: rules CRUD and alert history. All need a session; rule changes need admin."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal, Protocol
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
-from ..db import AlertRow, RuleRow
+from .deps import Store, current_user, require_admin
 from .schemas import AlertOut, AlertPage, ErrorOut, RuleIn, RuleOut
 
-
-class ApiStore(Protocol):
-    async def list_rules(self) -> list[RuleRow]: ...
-    async def get_rule(self, rule_id: str) -> RuleRow | None: ...
-    async def create_rule(self, data: dict) -> RuleRow: ...
-    async def update_rule(self, rule_id: str, data: dict) -> RuleRow | None: ...
-    async def delete_rule(self, rule_id: str) -> bool: ...
-    async def list_alerts(self, **filters: Any) -> tuple[list[AlertRow], int]: ...
-    async def get_alert(self, alert_id: str) -> AlertRow | None: ...
-    async def ack_alert(self, alert_id: str, now: datetime) -> AlertRow | None: ...
-
-
-def get_store(request: Request) -> ApiStore:
-    return request.app.state.store
-
-
-Store = Annotated[ApiStore, Depends(get_store)]
-
 NOT_FOUND: dict[int | str, dict[str, Any]] = {404: {"model": ErrorOut}}
-router = APIRouter(prefix="/api/v1")
+AUTH: dict[int | str, dict[str, Any]] = {401: {"model": ErrorOut}}
+ADMIN: dict[int | str, dict[str, Any]] = {**AUTH, 403: {"model": ErrorOut}}
+ADMIN_ONLY = [Depends(require_admin)]
+router = APIRouter(prefix="/api/v1", dependencies=[Depends(current_user)], responses=AUTH)
 
 
 async def _rules_changed(request: Request) -> None:
@@ -46,7 +31,13 @@ async def list_rules(store: Store):
 
 
 @router.post(
-    "/rules", response_model=RuleOut, status_code=201, tags=["rules"], summary="Create a rule"
+    "/rules",
+    response_model=RuleOut,
+    status_code=201,
+    responses=ADMIN,
+    dependencies=ADMIN_ONLY,
+    tags=["rules"],
+    summary="Create a rule (admin)",
 )
 async def create_rule(body: RuleIn, store: Store, request: Request):
     row = await store.create_rule(body.model_dump())
@@ -71,9 +62,10 @@ async def get_rule(rule_id: str, store: Store):
 @router.put(
     "/rules/{rule_id}",
     response_model=RuleOut,
-    responses=NOT_FOUND,
+    responses={**NOT_FOUND, **ADMIN},
+    dependencies=ADMIN_ONLY,
     tags=["rules"],
-    summary="Replace a rule",
+    summary="Replace a rule (admin)",
 )
 async def replace_rule(rule_id: str, body: RuleIn, store: Store, request: Request):
     row = await store.update_rule(rule_id, body.model_dump())
@@ -86,9 +78,10 @@ async def replace_rule(rule_id: str, body: RuleIn, store: Store, request: Reques
 @router.delete(
     "/rules/{rule_id}",
     status_code=204,
-    responses=NOT_FOUND,
+    responses={**NOT_FOUND, **ADMIN},
+    dependencies=ADMIN_ONLY,
     tags=["rules"],
-    summary="Delete a rule (alert history is kept)",
+    summary="Delete a rule, keeping its alert history (admin)",
 )
 async def delete_rule(rule_id: str, store: Store, request: Request):
     if not await store.delete_rule(rule_id):

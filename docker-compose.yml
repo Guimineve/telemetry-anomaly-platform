@@ -93,6 +93,11 @@ services:
       DATABASE_URL: postgresql+asyncpg://telemetry:telemetry@postgres:5432/telemetry
       KAFKA_BOOTSTRAP: kafka:9092
       STARTUP_GRACE_S: "5"
+      # development-only credentials, like the database passwords above
+      JWT_SECRET: dev-only-jwt-secret-do-not-use-in-production
+      ADMIN_USERNAME: admin
+      ADMIN_PASSWORD: admin-dev-password
+      FORWARDED_ALLOW_IPS: "*" # trust X-Forwarded-For from the web container for rate limiting
     ports:
       - "8000:8000"
     depends_on:

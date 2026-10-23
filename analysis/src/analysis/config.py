@@ -21,6 +21,11 @@ class Settings:
     sweep_interval_s: float = 5.0
     rules_refresh_s: float = 5.0
     seed_default_rules: bool = True
+    jwt_secret: str = ""
+    session_ttl_s: float = 8 * 3600
+    cookie_secure: str = "auto"  # "auto" (follow the request scheme), "true" or "false"
+    admin_username: str = ""
+    admin_password: str = ""
 
     @classmethod
     def from_env(cls) -> Settings:
@@ -37,4 +42,9 @@ class Settings:
             sweep_interval_s=float(os.getenv("SWEEP_INTERVAL_S", d.sweep_interval_s)),
             rules_refresh_s=float(os.getenv("RULES_REFRESH_S", d.rules_refresh_s)),
             seed_default_rules=_bool("SEED_DEFAULT_RULES", d.seed_default_rules),
+            jwt_secret=os.getenv("JWT_SECRET", d.jwt_secret),
+            session_ttl_s=float(os.getenv("SESSION_TTL_S", d.session_ttl_s)),
+            cookie_secure=os.getenv("COOKIE_SECURE", d.cookie_secure).lower(),
+            admin_username=os.getenv("ADMIN_USERNAME", d.admin_username).strip().lower(),
+            admin_password=os.getenv("ADMIN_PASSWORD", d.admin_password),
         )

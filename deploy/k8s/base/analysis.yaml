@@ -29,6 +29,8 @@ spec:
           image: telemetry-analysis:dev
           ports:
             - containerPort: 8000
+          envFrom:
+            - secretRef: { name: analysis-auth }
           env:
             - name: POSTGRES_PASSWORD
               valueFrom: { secretKeyRef: { name: postgres-credentials, key: POSTGRES_PASSWORD } }
@@ -36,6 +38,7 @@ spec:
               value: "postgresql+asyncpg://telemetry:$(POSTGRES_PASSWORD)@postgres:5432/telemetry"
             - { name: KAFKA_BOOTSTRAP, value: "kafka:9092" }
             - { name: STARTUP_GRACE_S, value: "5" }
+            - { name: FORWARDED_ALLOW_IPS, value: "*" } # client IP from the web pod's X-Forwarded-For
           startupProbe:
             httpGet: { path: /health, port: 8000 }
             periodSeconds: 3

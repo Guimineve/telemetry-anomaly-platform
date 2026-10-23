@@ -24,6 +24,13 @@ def test_openapi_documents_the_expected_surface():
     assert set(paths["/api/v1/rules/{rule_id}"]) == {"get", "put", "delete"}
     assert set(paths["/api/v1/alerts"]) == {"get"}
     assert "post" in paths["/api/v1/alerts/{alert_id}/ack"]
+    for p in ("register", "login", "logout"):
+        assert set(paths[f"/api/v1/auth/{p}"]) == {"post"}
+    assert set(paths["/api/v1/auth/me"]) == {"get"}
+    assert set(paths["/api/v1/users"]) == {"get"}
+    assert set(paths["/api/v1/users/{user_id}"]) == {"patch"}
+    assert "401" in paths["/api/v1/alerts"]["get"]["responses"]
+    assert "403" in paths["/api/v1/rules"]["post"]["responses"]
     assert {p["name"] for p in paths["/api/v1/alerts"]["get"]["parameters"]} >= {
         "deviceId",
         "severity",

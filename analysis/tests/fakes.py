@@ -5,13 +5,14 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from analysis.db import AlertRow, RuleRow
+from analysis.db import AlertRow, RuleRow, UserRow
 
 
 class FakeStore:
     def __init__(self) -> None:
         self.rules: dict[str, RuleRow] = {}
         self.alerts: dict[str, AlertRow] = {}
+        self.users: dict[str, UserRow] = {}
 
     async def list_rules(self):
         return sorted(self.rules.values(), key=lambda r: r.name)
@@ -82,3 +83,38 @@ class FakeStore:
         if row is not None and row.acknowledged_at is None:
             row.acknowledged_at = now
         return row
+
+    async def create_user(self, username, password_hash, role):
+        if any(u.username == username for u in self.users.values()):
+            return None
+        row = UserRow(
+            id=str(uuid.uuid4()),
+            username=username,
+            password_hash=password_hash,
+            role=role,
+            is_active=True,
+            created_at=datetime.now(UTC),
+            last_login_at=None,
+        )
+        self.users[row.id] = row
+        return row
+
+    async def get_user(self, user_id):
+        return self.users.get(user_id)
+
+    async def get_user_by_username(self, username):
+        return next((u for u in self.users.values() if u.username == username), None)
+
+    async def list_users(self):
+        return sorted(self.users.values(), key=lambda u: u.username)
+
+    async def update_user(self, user_id, data):
+        row = self.users.get(user_id)
+        if row is not None:
+            for k, v in data.items():
+                setattr(row, k, v)
+        return row
+
+    async def record_login(self, user_id, now):
+        if user_id in self.users:
+            self.users[user_id].last_login_at = now

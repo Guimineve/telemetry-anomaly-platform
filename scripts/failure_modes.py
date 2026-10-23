@@ -27,6 +27,7 @@ INGEST = os.getenv("INGEST_URL", "http://localhost:8080")
 API = os.getenv(
     "API_URL", "http://localhost:8000"
 )  # direct, so nginx DNS caching is not involved
+ADMIN = (os.getenv("ADMIN_USERNAME", "admin"), os.getenv("ADMIN_PASSWORD", "admin-dev-password"))
 
 
 def log(msg: str) -> None:
@@ -161,8 +162,20 @@ async def kafka_phase(http) -> None:
     log(f"end-to-end alerting works again: {alert['message']}")
 
 
+async def login() -> str:
+    """Session cookie for the admin. Tokens are stateless, so it survives service restarts."""
+    async with httpx.AsyncClient(timeout=10) as anon:
+        r = await anon.post(
+            f"{API}/api/v1/auth/login", json={"username": ADMIN[0], "password": ADMIN[1]}
+        )
+    if r.status_code != 200:
+        fail(f"admin login failed: {r.status_code} {r.text}")
+    return r.cookies["session"]
+
+
 async def main() -> None:
-    async with httpx.AsyncClient(timeout=10) as http:
+    session = {"Cookie": f"session={await login()}"}
+    async with httpx.AsyncClient(timeout=10, headers=session) as http:
         await mongo_phase(http)
         await analysis_phase(http)
         await postgres_phase(http)

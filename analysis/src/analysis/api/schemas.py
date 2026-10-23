@@ -130,3 +130,41 @@ class AlertPage(ApiModel):
 
 class ErrorOut(BaseModel):
     detail: str
+
+
+# -- auth and users --------------------------------------------------------
+Role = Literal["admin", "viewer"]
+USERNAME_PATTERN = r"^[a-z0-9_.-]{3,32}$"
+
+
+class _Lowercase(ApiModel):
+    @model_validator(mode="before")
+    @classmethod
+    def _normalise(cls, data: Any) -> Any:
+        if isinstance(data, dict) and isinstance(data.get("username"), str):
+            return {**data, "username": data["username"].strip().lower()}
+        return data
+
+
+class RegisterIn(_Lowercase):
+    username: str = Field(pattern=USERNAME_PATTERN, description="3-32 of a-z 0-9 _ . -")
+    password: str = Field(min_length=10, max_length=128)
+
+
+class LoginIn(_Lowercase):
+    username: str = Field(min_length=1, max_length=32)
+    password: str = Field(min_length=1, max_length=128)
+
+
+class UserOut(ApiModel):
+    id: str
+    username: str
+    role: Role
+    is_active: bool
+    created_at: datetime | None = None
+    last_login_at: datetime | None = None
+
+
+class UserPatch(ApiModel):
+    role: Role | None = None
+    is_active: bool | None = None

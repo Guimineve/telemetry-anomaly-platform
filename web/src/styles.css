@@ -50,7 +50,7 @@ section { background: var(--card); border: 1px solid var(--border); border-radiu
 .error { color: var(--critical); }
 .filters { display: flex; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
 .filters label { display: grid; font-size: 0.8rem; color: var(--muted); gap: 2px; }
-select, button { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
+select, button, input { font: inherit; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--card); color: var(--text); }
 button { cursor: pointer; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
@@ -58,3 +58,14 @@ th { color: var(--muted); font-weight: 500; }
 tr.sev-critical td:nth-child(4) { color: var(--critical); }
 tr.sev-warning td:nth-child(4) { color: var(--warning); }
 .rules li.disabled { opacity: 0.5; }
+.top { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
+.top h1 { margin: 0; margin-right: auto; }
+.auth { max-width: 380px; padding-top: 48px; }
+.auth-form { display: grid; gap: 10px; margin-bottom: 8px; }
+.auth-form label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+.auth-form input { padding: 6px 8px; }
+button:disabled { opacity: 0.6; cursor: default; }
+button.link { border: none; background: none; padding: 0; color: var(--info); }
+.rule-actions { display: inline-flex; gap: 6px; margin-left: 8px; }
+.rule-actions button { font-size: 0.8rem; padding: 1px 6px; }
+tr.disabled td { opacity: 0.5; }
