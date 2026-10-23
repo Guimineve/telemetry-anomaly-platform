@@ -7,7 +7,7 @@ RUN mvn -q -B -f ingestion/pom.xml dependency:go-offline
 COPY ingestion/src ./ingestion/src
 RUN mvn -q -B -f ingestion/pom.xml package -DskipTests
 
-FROM eclipse-temurin:21-jre
+FROM eclipse-temurin:25-jre
 # pebble (Canonical's service manager) ships in the base image but is never run here; removing it
 # drops a Go binary that vulnerability scans flag
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
