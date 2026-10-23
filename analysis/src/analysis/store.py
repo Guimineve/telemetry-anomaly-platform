@@ -7,9 +7,10 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from .db import AlertRow, RuleRow
+from .db import AlertRow, RuleRow, UserRow
 from .rules.models import Alert, Rule
 
 _NS = uuid.UUID("6f1d0a52-6b0e-4f5e-9d3a-0a1b2c3d4e5f")
@@ -221,3 +222,49 @@ class Store:
             if row.acknowledged_at is None:
                 row.acknowledged_at = now
             return row
+
+    # -- users -----------------------------------------------------------
+    async def create_user(self, username: str, password_hash: str, role: str) -> UserRow | None:
+        """Insert a user; None if the username is taken (also safe under concurrent inserts)."""
+        stmt = (
+            insert(UserRow)
+            .values(
+                id=str(uuid.uuid4()),
+                username=username,
+                password_hash=password_hash,
+                role=role,
+                is_active=True,
+            )
+            .on_conflict_do_nothing(index_elements=[UserRow.username])
+            .returning(UserRow)
+        )
+        async with self._sessions.begin() as s:
+            return (await s.execute(stmt)).scalar_one_or_none()
+
+    async def get_user(self, user_id: str) -> UserRow | None:
+        async with self._sessions() as s:
+            return await s.get(UserRow, user_id)
+
+    async def get_user_by_username(self, username: str) -> UserRow | None:
+        async with self._sessions() as s:
+            stmt = select(UserRow).where(UserRow.username == username)
+            return (await s.execute(stmt)).scalar_one_or_none()
+
+    async def list_users(self) -> list[UserRow]:
+        async with self._sessions() as s:
+            return list((await s.execute(select(UserRow).order_by(UserRow.username))).scalars())
+
+    async def update_user(self, user_id: str, data: dict) -> UserRow | None:
+        async with self._sessions.begin() as s:
+            row = await s.get(UserRow, user_id)
+            if row is None:
+                return None
+            for key, value in data.items():
+                setattr(row, key, value)
+            return row
+
+    async def record_login(self, user_id: str, now: datetime) -> None:
+        async with self._sessions.begin() as s:
+            row = await s.get(UserRow, user_id)
+            if row is not None:
+                row.last_login_at = now

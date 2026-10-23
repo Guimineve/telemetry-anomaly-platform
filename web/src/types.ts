@@ -37,3 +37,14 @@ export interface Rule {
   severity: Severity;
   enabled: boolean;
 }
+
+export type Role = "admin" | "viewer";
+
+export interface User {
+  id: string;
+  username: string;
+  role: Role;
+  isActive: boolean;
+  createdAt: string | null;
+  lastLoginAt: string | null;
+}

@@ -5,6 +5,7 @@ Injects faults into the simulator and checks the whole path:
   spike     -> exactly one threshold alert, seen on the WebSocket AND the REST history
   malformed -> counted as rejected by ingestion (routed to the dead-letter topic)
   dropout   -> "Device silent" alert opens, then resolves when the device returns
+  auth      -> no session is refused (REST and WebSocket); a registered viewer cannot change rules
 
 Everything user-facing goes through the web container (nginx), so its /api and /ws proxying is
 exercised too. Requires: pip install httpx websockets
@@ -25,6 +26,7 @@ WEB = os.getenv("WEB_URL", "http://localhost:3000")
 SIM = os.getenv("SIM_URL", "http://localhost:8001")
 INGEST = os.getenv("INGEST_URL", "http://localhost:8080")
 WS = WEB.replace("http", "ws", 1) + "/ws/alerts"
+ADMIN = (os.getenv("ADMIN_USERNAME", "admin"), os.getenv("ADMIN_PASSWORD", "admin-dev-password"))
 
 
 def log(msg: str) -> None:
@@ -65,6 +67,44 @@ async def alerts(http: httpx.AsyncClient, **params) -> list[dict]:
     return r.json()["items"]
 
 
+async def login(username: str, password: str) -> str:
+    """Log in through the web container and return the session cookie value."""
+    async with httpx.AsyncClient(timeout=10) as anon:
+        r = await anon.post(
+            f"{WEB}/api/v1/auth/login", json={"username": username, "password": password}
+        )
+    if r.status_code != 200:
+        raise RuntimeError(f"login as {username} failed: {r.status_code} {r.text}")
+    return r.cookies["session"]
+
+
+async def check_auth() -> None:
+    async with httpx.AsyncClient(timeout=10) as anon:
+        r = await anon.get(f"{WEB}/api/v1/alerts")
+        if r.status_code != 401:
+            fail(f"alerts without a session returned {r.status_code}, expected 401")
+        try:
+            async with websockets.connect(WS):
+                fail("WebSocket accepted a connection without a session")
+        except websockets.exceptions.InvalidStatus:
+            pass
+
+        name = f"smoke{int(time.time())}"
+        r = await anon.post(
+            f"{WEB}/api/v1/auth/register", json={"username": name, "password": "smoke-password"}
+        )
+        if r.status_code != 201 or r.json()["role"] != "viewer":
+            fail(f"registration failed: {r.status_code} {r.text}")
+        viewer = {"Cookie": f"session={r.cookies['session']}"}
+        rule = {"name": "x", "type": "threshold", "metric": "voltage", "params": {"max": 1}}
+        r = await anon.post(f"{WEB}/api/v1/rules", json=rule, headers=viewer)
+        if r.status_code != 403:
+            fail(f"viewer created a rule: {r.status_code}, expected 403")
+        if (await anon.get(f"{WEB}/api/v1/alerts", headers=viewer)).status_code != 200:
+            fail("viewer could not read alerts")
+    log("auth: anonymous requests refused, new viewer can read but not change rules")
+
+
 async def post_fault(http: httpx.AsyncClient, **body) -> None:
     r = await http.post(f"{SIM}/faults", json=body)
     if r.status_code != 202:
@@ -72,14 +112,16 @@ async def post_fault(http: httpx.AsyncClient, **body) -> None:
 
 
 async def main() -> None:
-    async with httpx.AsyncClient(timeout=10) as http:
+    async with httpx.AsyncClient(timeout=10) as probe:
         log("waiting for services")
-        for name, url in (
-            ("simulator", f"{SIM}/health"),
-            ("web", f"{WEB}/healthz"),
-            ("analysis api", f"{WEB}/api/v1/rules"),
-        ):
-            await wait_until(name, lambda url=url: _is_up(http, url), 90)
+        for name, url in (("simulator", f"{SIM}/health"), ("web", f"{WEB}/healthz")):
+            await wait_until(name, lambda url=url: _is_up(probe, url), 90)
+    # succeeds once the analysis service is up and the bootstrap admin exists
+    token = await wait_until("admin login", lambda: login(*ADMIN), 90)
+    session = {"Cookie": f"session={token}"}
+    await check_auth()
+
+    async with httpx.AsyncClient(timeout=10, headers=session) as http:
         rules = (await http.get(f"{WEB}/api/v1/rules")).json()
         if not rules:
             fail("no rules seeded")
@@ -89,7 +131,7 @@ async def main() -> None:
         before = await alerts(http, deviceId="sensor-001", state="open")
         known_ids = {a["id"] for a in before}
 
-        async with websockets.connect(WS) as ws:
+        async with websockets.connect(WS, additional_headers=session) as ws:
             await ws.send("ping")
             if await asyncio.wait_for(ws.recv(), 5) != "pong":
                 fail("websocket did not answer ping")

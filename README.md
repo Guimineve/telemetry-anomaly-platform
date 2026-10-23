@@ -25,8 +25,8 @@ flowchart LR
 |---|---|---|
 | [simulator/](simulator) | Python, aiokafka, FastAPI | Several devices (temperature, voltage, pressure, heartbeat) with noise. HTTP control port to inject `drift`, `spike`, `dropout` and `malformed` faults. |
 | [ingestion/](ingestion) | Java 21, Spring Boot 3.5, Spring Kafka | Validates each message against [the JSON Schema contract](contracts/reading.schema.json). Valid readings are upserted into MongoDB (keyed by reading id, so redelivery is idempotent) and forwarded; invalid ones go to the dead-letter topic with a `reason` header. |
-| [analysis/](analysis) | Python, FastAPI, SQLAlchemy, Alembic | Pure rules engine (below), Kafka worker, REST API, WebSocket. Rules and alert history live in PostgreSQL. |
-| [web/](web) | React, Vite, TypeScript | Live alert feed, filterable history with acknowledge, rules list. |
+| [analysis/](analysis) | Python, FastAPI, SQLAlchemy, Alembic | Pure rules engine (below), Kafka worker, REST API, WebSocket, users and login. Rules, alert history and users live in PostgreSQL. |
+| [web/](web) | React, Vite, TypeScript | Login and sign-up, live alert feed, filterable history with acknowledge, rules list, user management for admins. |
 | [deploy/k8s/](deploy/k8s) | Kustomize | Manifests for everything, with a kind overlay. |
 
 Topics are keyed by device id, so one device's readings stay ordered and its rule state lives on one analysis replica.
@@ -51,6 +51,8 @@ docker compose up --build --wait
 open http://localhost:3000        # live view; REST docs at http://localhost:3000/docs
 ```
 
+Log in as `admin` / `admin-dev-password` (development credentials from [docker-compose.yml](docker-compose.yml)), or create a viewer account on the login page.
+
 Make something happen:
 
 ```bash
@@ -67,12 +69,27 @@ curl -X POST localhost:8001/faults -H 'content-type: application/json' \
   -d '{"kind":"malformed","deviceId":"sensor-003","count":3}'
 ```
 
-Add your own rule:
+Add your own rule (admins only, so log in first and keep the session cookie):
 
 ```bash
-curl -X POST localhost:3000/api/v1/rules -H 'content-type: application/json' \
+curl -c /tmp/telemetry.cookies -X POST localhost:3000/api/v1/auth/login -H 'content-type: application/json' \
+  -d '{"username":"admin","password":"admin-dev-password"}'
+curl -b /tmp/telemetry.cookies -X POST localhost:3000/api/v1/rules -H 'content-type: application/json' \
   -d '{"name":"Pressure high","type":"threshold","metric":"pressure","params":{"max":110},"severity":"warning"}'
 ```
+
+### Users and login
+
+| Role | Can |
+|---|---|
+| `viewer` | See live alerts, alert history and rules; acknowledge alerts. Anyone can sign up as a viewer. |
+| `admin` | Everything a viewer can, plus create, change and delete rules, and change users' roles or disable them. |
+
+- The first admin comes from `ADMIN_USERNAME` / `ADMIN_PASSWORD`. It is created at startup only if no user has that name, so changing the variable later does not reset an existing password. Sign-up never creates an admin; an admin promotes users.
+- Logging in sets an `HttpOnly`, `SameSite=Strict` cookie holding a JWT (HS256, signed with `JWT_SECRET`, 8 h by default) with only the user id in it. The user is loaded on every request, so a role change or a disabled account takes effect immediately. `COOKIE_SECURE` (`auto`, `true`, `false`) controls the `Secure` flag.
+- Passwords are hashed with argon2id. Login answers the same way for an unknown user and a wrong password, and five failures per minute for a username or client IP returns 429.
+- Every `/api/v1` route and `/ws/alerts` needs the session. The WebSocket also refuses a browser `Origin` that does not match the host. `/health`, `/ready`, `/docs` and `/openapi.json` stay public.
+- The service refuses to start with a `JWT_SECRET` shorter than 32 characters.
 
 The API is documented in [docs/openapi.json](docs/openapi.json), generated from the code and checked for drift in tests and CI.
 
@@ -98,9 +115,9 @@ Everything below runs in GitHub Actions on every push ([ci.yml](.github/workflow
 | Rules engine | 25 unit tests with an injected clock: boundaries, sustained breach, per-device state, cooldown, restart restore, rate of change, z-score warm-up, heartbeat timeout and startup grace. |
 | Contracts | The simulator's output and the alert JSON are validated against the JSON Schemas in [contracts/](contracts). |
 | Ingestion | 13 validator unit tests; 3 Testcontainers integration tests on real Kafka and MongoDB (valid reading stored and forwarded, bad message to the DLQ with a reason, duplicate delivery stored once). |
-| Analysis | Unit tests for the pipeline's retry behaviour and the HTTP layer (with an in-memory store); Testcontainers tests on real PostgreSQL and Kafka for migrations, SQL queries, and the whole flow from `telemetry.validated` to an alert on `telemetry.alerts` plus a database row. |
-| Web | 8 vitest tests (WebSocket reconnect/backoff, de-duplication, query building), type-check and production build. |
-| End to end | [scripts/smoke.py](scripts/smoke.py) runs against the full compose stack and, again, against a kind cluster. It injects a spike and asserts exactly one threshold alert, seen both on the WebSocket and in the REST history; then malformed messages (rejected) and a dropout (silent-device alert opens, then resolves). |
+| Analysis | Unit tests for the pipeline's retry behaviour and the HTTP layer (with an in-memory store), including login, sign-up, sessions, rate limiting, role checks and WebSocket auth; Testcontainers tests on real PostgreSQL and Kafka for migrations, SQL queries (including unique usernames under concurrent inserts), and the whole flow from `telemetry.validated` to an alert on `telemetry.alerts` plus a database row. |
+| Web | 16 vitest tests (WebSocket reconnect/backoff, de-duplication, query building, login/sign-up/logout, return to login on 401, admin-only controls), type-check and production build. |
+| End to end | [scripts/smoke.py](scripts/smoke.py) runs against the full compose stack and, again, against a kind cluster. It logs in as the admin, checks that requests without a session are refused and that a newly registered viewer cannot change rules, then injects a spike and asserts exactly one threshold alert, seen both on the WebSocket and in the REST history; then malformed messages (rejected) and a dropout (silent-device alert opens, then resolves). |
 | Images and manifests | All four images are built; manifests are validated with kubeconform; the kind job deploys them. CD re-runs the kind smoke test on the images it just published to GHCR. |
 
 Not tested: more than one analysis replica, any real hardware, long runs, security.
@@ -113,7 +130,7 @@ Not tested: more than one analysis replica, any real hardware, long runs, securi
 |---|---|---|
 | **MongoDB** | Ingestion does not ack, retries with capped backoff, and the backlog stays in Kafka. | Ingestion's accepted count stayed flat for 10 s with Mongo stopped, then caught up from the backlog after restart. |
 | **Analysis service** | Readings queue in Kafka and are processed after restart. | A spike injected while it was down produced its alert after restart. While it is down there are no alerts, including no silent-device alerts. |
-| **PostgreSQL** | Alert persistence retries with backoff and the Kafka offset is not committed, so the consumer stalls instead of dropping alerts. The REST API returns errors. | A spike during the outage was persisted and visible after PostgreSQL returned. |
+| **PostgreSQL** | Alert persistence retries with backoff and the Kafka offset is not committed, so the consumer stalls instead of dropping alerts. The REST API returns errors, and so do login and the WebSocket handshake, because every request loads the user from the database. | A spike during the outage was persisted and visible after PostgreSQL returned. |
 | **Kafka** | Clients reconnect. Ingestion retries a failed batch. | Readings flowed again after a 15 s broker stop and a new spike alerted end to end. |
 | **Ingestion service** | Readings queue in Kafka. Redelivery is idempotent in MongoDB. | Same mechanism as the MongoDB row; the service itself was not stopped. |
 | **Bad message** | Goes to `telemetry.dlq` and never blocks the partition. | Smoke test. |
@@ -135,8 +152,13 @@ This is one machine shape and a handful of runs, with the first run including JV
 - Silent-device detection uses the arrival time of heartbeats, so a stalled pipeline also looks like silent devices.
 - Rate-of-change and z-score windows are held in memory and rebuilt from the stream after a restart. Open alerts are restored from PostgreSQL.
 - Delivery is at-least-once. A crash between saving an alert and committing the offset can produce a duplicate alert row.
-- Single-broker Kafka, single-instance databases, no TLS or authentication, development passwords. The Kubernetes manifests are a working local demo, not a hardened deployment.
-- Rules are managed through the REST API; the UI only lists them.
+- Single-broker Kafka, single-instance databases, no TLS, development passwords and a development `JWT_SECRET`. The Kubernetes manifests are a working local demo, not a hardened deployment.
+- Only the analysis API, its WebSocket and the UI require login. The simulator's fault-injection port, ingestion's Actuator endpoints, Kafka and the databases are unauthenticated and must not be exposed.
+- Anyone who can reach the app can create a viewer account and read alerts.
+- A session cannot be revoked before it expires except by disabling the user (or changing `JWT_SECRET`, which logs everyone out). An open WebSocket keeps receiving alerts until it reconnects, even after the session expires or the user is disabled.
+- The login rate limit is kept in memory per analysis replica and resets on restart. It is keyed partly on the client IP from `X-Forwarded-For`, which a client can forge when it reaches port 8000 directly instead of through the web container; the per-username limit still applies. An attacker can also lock a known username out for a minute at a time.
+- There is no password change or reset yet; an admin can disable an account but not set its password.
+- Rules are created through the REST API; in the UI admins can only enable, disable or delete them.
 
 ## Repository map
 
