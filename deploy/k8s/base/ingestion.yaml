@@ -1,12 +1,4 @@
-apiVersion: v1
-kind: Service
-metadata:
-  name: ingestion
-spec:
-  selector: { app: ingestion }
-  ports:
-    - { port: 8080, targetPort: 8080 }
----
+# No Service: nothing calls ingestion over HTTP. Its only port is the Actuator (probes, metrics).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -42,19 +34,19 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
           ports:
-            - containerPort: 8080
+            - { name: management, containerPort: 8081 }
           env:
             - { name: KAFKA_BOOTSTRAP, value: "kafka:9092" }
             - { name: MONGO_URI, value: "mongodb://mongo:27017/telemetry" }
           startupProbe:
-            httpGet: { path: /actuator/health/liveness, port: 8080 }
+            httpGet: { path: /actuator/health/liveness, port: management }
             periodSeconds: 3
             failureThreshold: 40
           livenessProbe:
-            httpGet: { path: /actuator/health/liveness, port: 8080 }
+            httpGet: { path: /actuator/health/liveness, port: management }
             periodSeconds: 10
           readinessProbe:
-            httpGet: { path: /actuator/health/readiness, port: 8080 }
+            httpGet: { path: /actuator/health/readiness, port: management }
             periodSeconds: 5
           resources:
             requests: { cpu: 200m, memory: 384Mi }

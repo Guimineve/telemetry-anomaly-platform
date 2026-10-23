@@ -56,16 +56,20 @@ Log in as `admin` / `admin-dev-password` (development credentials from [docker-c
 Make something happen:
 
 ```bash
+SIM='Authorization: Bearer simulator-dev-token'   # development token from docker-compose.yml
+```
+
+```bash
 # a temperature spike on one device -> threshold alert within about a second
-curl -X POST localhost:8001/faults -H 'content-type: application/json' \
+curl -X POST localhost:8001/faults -H 'content-type: application/json' -H "$SIM" \
   -d '{"kind":"spike","deviceId":"sensor-001","metric":"temperature","magnitude":50}'
 
 # silence a device for 25 s -> "Device silent" alert opens, then resolves when it returns
-curl -X POST localhost:8001/faults -H 'content-type: application/json' \
+curl -X POST localhost:8001/faults -H 'content-type: application/json' -H "$SIM" \
   -d '{"kind":"dropout","deviceId":"sensor-002","durationS":25}'
 
 # 3 bad payloads -> rejected by ingestion and sent to telemetry.dlq
-curl -X POST localhost:8001/faults -H 'content-type: application/json' \
+curl -X POST localhost:8001/faults -H 'content-type: application/json' -H "$SIM" \
   -d '{"kind":"malformed","deviceId":"sensor-003","count":3}'
 ```
 
@@ -112,9 +116,10 @@ KEEP_CLUSTER=1 scripts/kind-e2e.sh telemetry- dev     # create cluster, deploy, 
 [deploy/k8s/overlays/cloud](deploy/k8s/overlays/cloud) is a provider-neutral overlay. `deploy/k8s/base` contains no secret values: the kind overlay adds development Secrets, and the cloud overlay creates them with [External Secrets Operator](https://external-secrets.io) from your provider's secret manager.
 
 1. Install External Secrets Operator and create a `ClusterSecretStore` named `telemetry-secrets` for your provider (AWS Secrets Manager, Google Secret Manager, Azure Key Vault, Vault, ...). Install an ingress controller (ingress-nginx is the default class) and cert-manager, then set your email in [deploy/k8s/cluster/cluster-issuer.yaml](deploy/k8s/cluster/cluster-issuer.yaml) and apply it once.
-2. Create two secrets there, each a JSON object:
+2. Create three secrets there, each a JSON object:
    - `telemetry/postgres`: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
    - `telemetry/analysis-auth`: `JWT_SECRET` (32+ random characters), `ADMIN_USERNAME`, `ADMIN_PASSWORD` (10+ characters)
+   - `telemetry/simulator`: `SIMULATOR_TOKEN` (random; needed to inject faults)
 3. Replace `telemetry.example.com` in [ingress.yaml](deploy/k8s/overlays/cloud/ingress.yaml) with your host and point its DNS at the ingress controller.
 4. `kubectl apply -k deploy/k8s/overlays/cloud` (images come from GHCR). cert-manager obtains a Let's Encrypt certificate for the host; a network policy lets its HTTP-01 solver through the namespace's default deny. The overlay sets `COOKIE_SECURE=true`.
 
@@ -169,7 +174,7 @@ This is one machine shape and a handful of runs, with the first run including JV
 - NetworkPolicies deny all traffic by default and allow only what the pipeline uses (web → analysis, analysis → Kafka and PostgreSQL, ingestion → Kafka and MongoDB, simulator → Kafka, plus DNS). The kind job checks that a pod labelled like `web` reaches analysis but is refused by the databases and Kafka, and that an unlabelled pod reaches nothing.
 - Every pod runs as a fixed non-root user with the default seccomp profile, no privilege escalation and all capabilities dropped. The four application containers also have read-only root filesystems (with an `emptyDir` for `/tmp`, and for nginx's generated config). Kafka, MongoDB and PostgreSQL keep writable root filesystems because their entrypoints write configuration into the image.
 - Single-broker Kafka, single-instance databases, no TLS between services (only at the cloud overlay's ingress), development passwords and a development `JWT_SECRET`. The Kubernetes manifests are a working local demo, not a hardened deployment.
-- Only the analysis API, its WebSocket and the UI require login. The simulator's fault-injection port, ingestion's Actuator endpoints, Kafka and the databases are unauthenticated and must not be exposed.
+- Kafka, MongoDB and PostgreSQL have no authentication of their own; they are reachable only from the services that use them (network policies in Kubernetes, `127.0.0.1`-only ports in compose). The simulator's fault API needs a bearer token (`SIMULATOR_TOKEN`) and is refused when none is set. Ingestion's Actuator (health, metrics) is on a separate port, 8081, with no Kubernetes Service.
 - Anyone who can reach the app can create a viewer account and read alerts.
 - A session cannot be revoked before it expires except by disabling the user (or changing `JWT_SECRET`, which logs everyone out). An open WebSocket keeps receiving alerts until it reconnects, even after the session expires or the user is disabled.
 - The login rate limit is kept in memory per analysis replica and resets on restart. It is keyed partly on the client IP from `X-Forwarded-For`, which a client can forge when it reaches port 8000 directly instead of through the web container; the per-username limit still applies. An attacker can also lock a known username out for a minute at a time.

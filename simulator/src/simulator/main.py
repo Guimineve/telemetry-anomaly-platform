@@ -68,11 +68,16 @@ async def main() -> None:
     n_devices = int(os.getenv("DEVICES", "5"))
     interval_s = float(os.getenv("TICK_INTERVAL_S", "1.0"))
     port = int(os.getenv("CONTROL_PORT", "8001"))
+    token = os.getenv("SIMULATOR_TOKEN", "")
+    if not token:
+        log.warning("SIMULATOR_TOKEN is not set: the fault-injection API is disabled")
 
     sim = Simulator([f"sensor-{i:03d}" for i in range(1, n_devices + 1)], random.Random())
     stats = Stats()
     server = uvicorn.Server(
-        uvicorn.Config(create_app(sim, stats), host="0.0.0.0", port=port, log_level="warning")
+        uvicorn.Config(
+            create_app(sim, stats, token), host="0.0.0.0", port=port, log_level="warning"
+        )
     )
     api_task = asyncio.create_task(server.serve())  # control API is up while Kafka connects
     producer = await connect(bootstrap)

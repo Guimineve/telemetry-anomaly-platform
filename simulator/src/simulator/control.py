@@ -1,12 +1,17 @@
-"""Small HTTP control surface to trigger faults and inspect the simulator."""
+"""Small HTTP control surface to trigger faults and inspect the simulator.
+
+Everything but /health needs `Authorization: Bearer <token>`. With no token configured the
+control endpoints are refused outright rather than left open.
+"""
 
 from __future__ import annotations
 
+import hmac
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from .devices import Fault, Simulator
@@ -29,14 +34,23 @@ class FaultRequest(BaseModel):
     model_config = {"populate_by_name": True}
 
 
-def create_app(sim: Simulator, stats: Stats) -> FastAPI:
+def create_app(sim: Simulator, stats: Stats, token: str = "") -> FastAPI:
     app = FastAPI(title="Telemetry simulator control", version="0.1.0")
+
+    def authorized(authorization: str = Header(default="")) -> None:
+        if not token:
+            raise HTTPException(503, "control API disabled: SIMULATOR_TOKEN is not set")
+        scheme, _, given = authorization.partition(" ")
+        if scheme.lower() != "bearer" or not hmac.compare_digest(given.encode(), token.encode()):
+            raise HTTPException(401, "missing or wrong bearer token")
+
+    guarded = [Depends(authorized)]
 
     @app.get("/health")
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
-    @app.get("/devices")
+    @app.get("/devices", dependencies=guarded)
     def devices() -> dict[str, object]:
         return {
             "devices": sim.device_ids,
@@ -48,7 +62,7 @@ def create_app(sim: Simulator, stats: Stats) -> FastAPI:
             "failed": stats.failed,
         }
 
-    @app.post("/faults", status_code=202)
+    @app.post("/faults", status_code=202, dependencies=guarded)
     def inject(req: FaultRequest) -> dict[str, str]:
         fault = Fault(
             kind=req.kind,

@@ -29,7 +29,7 @@ import httpx
 from aiokafka import AIOKafkaProducer
 
 BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP", "localhost:29092")
-INGEST = os.getenv("INGEST_URL", "http://localhost:8080")
+INGEST = os.getenv("INGEST_URL", "http://localhost:8081")  # Actuator port
 TOPIC = os.getenv("TOPIC_RAW", "telemetry.raw")
 METRICS = [
     ("temperature", "celsius", 40.0),

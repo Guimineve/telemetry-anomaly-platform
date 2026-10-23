@@ -23,10 +23,11 @@ import time
 import httpx
 
 SIM = os.getenv("SIM_URL", "http://localhost:8001")
-INGEST = os.getenv("INGEST_URL", "http://localhost:8080")
+INGEST = os.getenv("INGEST_URL", "http://localhost:8081")  # Actuator port
 API = os.getenv(
     "API_URL", "http://localhost:8000"
 )  # direct, so nginx DNS caching is not involved
+SIM_AUTH = {"Authorization": f"Bearer {os.getenv('SIMULATOR_TOKEN', 'simulator-dev-token')}"}
 ADMIN = (os.getenv("ADMIN_USERNAME", "admin"), os.getenv("ADMIN_PASSWORD", "admin-dev-password"))
 
 
@@ -75,6 +76,7 @@ async def spike(http, device: str) -> None:
             "metric": "temperature",
             "magnitude": 50,
         },
+        headers=SIM_AUTH,
     )
     if r.status_code != 202:
         fail(f"spike on {device} rejected: {r.status_code} {r.text}")
