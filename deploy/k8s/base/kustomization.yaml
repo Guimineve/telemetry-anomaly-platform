@@ -3,7 +3,6 @@ kind: Kustomization
 namespace: telemetry
 resources:
   - namespace.yaml
-  - secrets.yaml
   - kafka.yaml
   - mongo.yaml
   - postgres.yaml

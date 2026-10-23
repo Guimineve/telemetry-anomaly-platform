@@ -28,8 +28,10 @@ MIN_SECRET_LENGTH = 32
 MIN_PASSWORD_LENGTH = 10
 
 
-def check_auth_settings(settings: Settings) -> None:
-    """Fail fast on a missing or weak secret, or half-configured admin credentials."""
+def check_settings(settings: Settings) -> None:
+    """Fail fast on missing secrets, a weak signing key or half-configured admin credentials."""
+    if not settings.database_url:
+        raise RuntimeError("DATABASE_URL must be set")
     if len(settings.jwt_secret) < MIN_SECRET_LENGTH:
         raise RuntimeError(f"JWT_SECRET must be set to at least {MIN_SECRET_LENGTH} characters")
     if bool(settings.admin_username) != bool(settings.admin_password):
@@ -63,7 +65,7 @@ def create_app(settings: Settings | None = None, run_worker: bool = True) -> Fas
     """`run_worker=False` builds the HTTP surface only (OpenAPI export, tests)."""
     settings = settings or Settings.from_env()
     if run_worker:
-        check_auth_settings(settings)
+        check_settings(settings)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

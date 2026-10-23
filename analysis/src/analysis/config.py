@@ -10,7 +10,7 @@ def _bool(name: str, default: bool) -> bool:
 
 @dataclass(frozen=True)
 class Settings:
-    database_url: str = "postgresql+asyncpg://telemetry:telemetry@localhost:5432/telemetry"
+    database_url: str = ""  # required at startup; no default so no credential lives in code
     kafka_bootstrap: str = "localhost:9092"
     topic_validated: str = "telemetry.validated"
     topic_alerts: str = "telemetry.alerts"
