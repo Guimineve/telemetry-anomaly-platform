@@ -55,6 +55,31 @@ async def test_user_queries(postgres_url):
         await store.record_login(alice.id, now)
         assert (await store.get_user(alice.id)).last_login_at == now
 
+        async with engine.begin() as c:
+            await c.execute(text("TRUNCATE audit_events"))
+        t0 = datetime(2026, 1, 1, tzinfo=UTC)
+        for i, (action, actor) in enumerate(
+            [("login.failure", "ghost"), ("login.success", "alice"), ("rule.create", "alice")]
+        ):
+            await store.record_event(
+                ts=t0.replace(second=i),
+                actor_id=None,
+                actor_username=actor,
+                action=action,
+                target_type=None,
+                target_id=None,
+                ip="10.0.0.1",
+                detail={"n": i},
+            )
+        rows, total = await store.list_events(limit=2)
+        assert total == 3 and [r.action for r in rows] == ["rule.create", "login.success"]
+        assert rows[0].detail == {"n": 2}
+        assert (await store.list_events(action="login.failure"))[1] == 1
+        assert [r.action for r in (await store.list_events(actor="alice"))[0]] == [
+            "rule.create",
+            "login.success",
+        ]
+
         settings = Settings(jwt_secret="x" * 32, admin_username="root", admin_password="p" * 10)
         assert await bootstrap_admin(store, settings) is True
         assert await bootstrap_admin(store, settings) is False

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAuth } from "./auth";
 import { AccountPanel } from "./components/AccountPanel";
 import { AlertFeed } from "./components/AlertFeed";
+import { AuditLog } from "./components/AuditLog";
 import { HistoryTable } from "./components/HistoryTable";
 import { LoginPage } from "./components/LoginPage";
 import { RulesList } from "./components/RulesList";
@@ -66,6 +67,7 @@ function Dashboard({ user }: { user: User }) {
             <HistoryTable refreshKey={refreshKey} />
             <RulesList canEdit={isAdmin} />
             {isAdmin && <UsersAdmin me={user} />}
+            {isAdmin && <AuditLog />}
             <AccountPanel />
           </div>
         </div>

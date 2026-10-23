@@ -48,3 +48,22 @@ export interface User {
   createdAt: string | null;
   lastLoginAt: string | null;
 }
+
+export interface AuditEvent {
+  id: string;
+  ts: string;
+  actorId: string | null;
+  actorUsername: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  ip: string | null;
+  detail: Record<string, unknown>;
+}
+
+export interface AuditPage {
+  items: AuditEvent[];
+  total: number;
+  limit: number;
+  offset: number;
+}

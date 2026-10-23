@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
 from ..auth.passwords import hash_password, verify_password
 from ..db import UserRow
+from .audit import audit
 from .deps import SESSION_COOKIE, Admin, CurrentUser, Store, require_admin
 from .schemas import (
     ErrorOut,
@@ -64,6 +65,7 @@ async def register(body: RegisterIn, request: Request, response: Response, store
     user = await store.create_user(body.username, password_hash, "viewer")
     if user is None:
         raise HTTPException(409, "username already taken")
+    await audit(request, store, "user.register", actor=user, target_type="user", target_id=user.id)
     _start_session(request, response, user)
     return user
 
@@ -86,11 +88,13 @@ async def login(body: LoginIn, request: Request, response: Response, store: Stor
     )
     if not ok or user is None or not user.is_active:
         limiter.record(*keys)
+        await audit(request, store, "login.failure", actor=user, actor_username=body.username)
         raise HTTPException(401, "invalid username or password")
     limiter.reset(keys[1])
     now = datetime.now(UTC)
     await store.record_login(user.id, now)
     user.last_login_at = now
+    await audit(request, store, "login.success", actor=user)
     _start_session(request, response, user)
     return user
 
@@ -121,6 +125,9 @@ async def change_password(
         raise HTTPException(400, "current password is wrong")
     new_hash = await asyncio.to_thread(hash_password, body.new_password)
     updated = await store.set_password(user.id, new_hash)
+    await audit(
+        request, store, "user.password_change", actor=user, target_type="user", target_id=user.id
+    )
     response = Response(status_code=204)
     if updated is not None:
         _start_session(request, response, updated)  # this session continues under the new version
@@ -135,6 +142,9 @@ async def change_password(
 )
 async def logout_all(user: CurrentUser, request: Request, store: Store):
     await store.bump_token_version(user.id)
+    await audit(
+        request, store, "session.logout_all", actor=user, target_type="user", target_id=user.id
+    )
     response = Response(status_code=204)
     response.delete_cookie(SESSION_COOKIE, **_cookie_args(request))
     return response
@@ -156,7 +166,7 @@ async def list_users(store: Store):
     responses={404: ERR, 409: ERR},
     summary="Change a user's role or disable them (admin)",
 )
-async def update_user(user_id: str, body: UserPatch, admin: Admin, store: Store):
+async def update_user(user_id: str, body: UserPatch, admin: Admin, store: Store, request: Request):
     data = body.model_dump(exclude_none=True)
     demotes_self = data.get("role", "admin") != "admin" or not data.get("is_active", True)
     if user_id == admin.id and demotes_self:
@@ -166,6 +176,15 @@ async def update_user(user_id: str, body: UserPatch, admin: Admin, store: Store)
         raise HTTPException(404, "user not found")
     if data.get("is_active") is False:  # sessions stay dead even if the user is re-enabled later
         row = await store.bump_token_version(user_id) or row
+    await audit(
+        request,
+        store,
+        "user.update",
+        actor=admin,
+        target_type="user",
+        target_id=user_id,
+        detail=data,
+    )
     return row
 
 
@@ -175,10 +194,15 @@ async def update_user(user_id: str, body: UserPatch, admin: Admin, store: Store)
     responses={404: ERR, 409: ERR},
     summary="Set a user's password and end their sessions (admin)",
 )
-async def reset_password(user_id: str, body: PasswordResetIn, admin: Admin, store: Store):
+async def reset_password(
+    user_id: str, body: PasswordResetIn, admin: Admin, store: Store, request: Request
+):
     if user_id == admin.id:
         raise HTTPException(409, "change your own password with /auth/password")
     new_hash = await asyncio.to_thread(hash_password, body.new_password)
     if await store.set_password(user_id, new_hash) is None:
         raise HTTPException(404, "user not found")
+    await audit(
+        request, store, "user.password_reset", actor=admin, target_type="user", target_id=user_id
+    )
     return Response(status_code=204)

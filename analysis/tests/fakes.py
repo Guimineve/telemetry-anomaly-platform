@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from analysis.db import AlertRow, RuleRow, UserRow
+from analysis.db import AlertRow, AuditRow, RuleRow, UserRow
 
 
 class FakeStore:
@@ -13,6 +13,7 @@ class FakeStore:
         self.rules: dict[str, RuleRow] = {}
         self.alerts: dict[str, AlertRow] = {}
         self.users: dict[str, UserRow] = {}
+        self.events: list[AuditRow] = []
 
     async def list_rules(self):
         return sorted(self.rules.values(), key=lambda r: r.name)
@@ -132,3 +133,14 @@ class FakeStore:
     async def record_login(self, user_id, now):
         if user_id in self.users:
             self.users[user_id].last_login_at = now
+
+    async def record_event(self, **fields):
+        self.events.append(AuditRow(id=str(uuid.uuid4()), **fields))
+
+    async def list_events(self, *, action=None, actor=None, limit=50, offset=0):
+        rows = [
+            e
+            for e in reversed(self.events)
+            if (not action or e.action == action) and (not actor or e.actor_username == actor)
+        ]
+        return rows[offset : offset + limit], len(rows)

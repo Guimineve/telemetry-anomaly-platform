@@ -169,6 +169,12 @@ async def main() -> None:
     await check_headers()
 
     async with httpx.AsyncClient(timeout=10, headers=session) as http:
+        audit = await http.get(f"{WEB}/api/v1/audit", params={"action": "login.success"})
+        if audit.status_code != 200 or not any(
+            e["actorUsername"] == ADMIN[0] for e in audit.json()["items"]
+        ):
+            fail(f"admin login missing from the audit log: {audit.status_code} {audit.text}")
+        log("audit log records logins")
         rules = (await http.get(f"{WEB}/api/v1/rules")).json()
         if not rules:
             fail("no rules seeded")

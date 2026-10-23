@@ -1,4 +1,4 @@
-import type { AlertPage, Rule, StoredAlert, User } from "./types";
+import type { AlertPage, AuditPage, Rule, StoredAlert, User } from "./types";
 
 export class HttpError extends Error {
   constructor(
@@ -95,3 +95,6 @@ export const fetchUsers = (): Promise<User[]> => request<User[]>("/api/v1/users"
 
 export const updateUser = (id: string, patch: Partial<Pick<User, "role" | "isActive">>) =>
   post<User>(`/api/v1/users/${encodeURIComponent(id)}`, patch, "PATCH");
+
+export const fetchAudit = (f: { action?: string; limit?: number } = {}): Promise<AuditPage> =>
+  request<AuditPage>(`/api/v1/audit${alertsQuery(f)}`);

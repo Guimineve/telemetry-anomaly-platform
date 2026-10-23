@@ -174,6 +174,25 @@ class PasswordResetIn(ApiModel):
     new_password: str = Field(min_length=10, max_length=128)
 
 
+class AuditOut(ApiModel):
+    id: str
+    ts: datetime
+    actor_id: str | None
+    actor_username: str | None
+    action: str
+    target_type: str | None
+    target_id: str | None
+    ip: str | None
+    detail: dict[str, Any]
+
+
+class AuditPage(ApiModel):
+    items: list[AuditOut]
+    total: int
+    limit: int
+    offset: int
+
+
 class UserPatch(ApiModel):
     role: Role | None = None
     is_active: bool | None = None

@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from .db import AlertRow, RuleRow, UserRow
+from .db import AlertRow, AuditRow, RuleRow, UserRow
 from .rules.models import Alert, Rule
 
 _NS = uuid.UUID("6f1d0a52-6b0e-4f5e-9d3a-0a1b2c3d4e5f")
@@ -286,3 +286,35 @@ class Store:
             row = await s.get(UserRow, user_id)
             if row is not None:
                 row.last_login_at = now
+
+    # -- audit -----------------------------------------------------------
+    async def record_event(self, **fields) -> None:
+        async with self._sessions.begin() as s:
+            s.add(AuditRow(id=str(uuid.uuid4()), **fields))
+
+    async def list_events(
+        self,
+        *,
+        action: str | None = None,
+        actor: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> tuple[list[AuditRow], int]:
+        conds = []
+        if action:
+            conds.append(AuditRow.action == action)
+        if actor:
+            conds.append(AuditRow.actor_username == actor)
+        async with self._sessions() as s:
+            total = (
+                await s.execute(select(func.count()).select_from(AuditRow).where(*conds))
+            ).scalar_one()
+            stmt = (
+                select(AuditRow)
+                .where(*conds)
+                .order_by(AuditRow.ts.desc(), AuditRow.id)
+                .limit(limit)
+                .offset(offset)
+            )
+            rows = (await s.execute(stmt)).scalars().all()
+        return list(rows), total
