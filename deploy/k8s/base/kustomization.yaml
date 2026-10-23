@@ -11,3 +11,4 @@ resources:
   - analysis.yaml
   - simulator.yaml
   - web.yaml
+  - network-policies.yaml

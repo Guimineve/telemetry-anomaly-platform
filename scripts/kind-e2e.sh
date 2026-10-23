@@ -47,7 +47,24 @@ kubectl -n telemetry port-forward svc/simulator 8001:8001 >/dev/null 2>&1 & PIDS
 kubectl -n telemetry port-forward svc/ingestion 8080:8080 >/dev/null 2>&1 & PIDS+=($!)
 sleep 3
 
-python3 "$ROOT/scripts/smoke.py" || {
+probe() {  # probe <labels> <host> <port>: can a pod with these labels open the connection?
+  kubectl -n telemetry run "np-probe-$RANDOM" --image=busybox:1.36 --restart=Never --rm -i --quiet \
+    --labels="$1" --command -- nc -z -w 5 "$2" "$3" >/dev/null 2>&1
+}
+
+check_network_policies() {
+  echo "checking network policies"
+  # a pod labelled like web may reach analysis, but not the databases or Kafka
+  probe app=web analysis 8000 || { echo "FAIL: web-labelled pod cannot reach analysis"; return 1; }
+  for target in "postgres 5432" "mongo 27017" "kafka 9092"; do
+    if probe app=web $target; then echo "FAIL: web-labelled pod reached $target"; return 1; fi
+  done
+  # an unlabelled pod gets nothing, not even analysis
+  if probe app=intruder analysis 8000; then echo "FAIL: unlabelled pod reached analysis"; return 1; fi
+  echo "network policies enforced"
+}
+
+{ python3 "$ROOT/scripts/smoke.py" && check_network_policies; } || {
   kubectl -n telemetry get pods -o wide
   for app in ingestion analysis simulator kafka; do
     echo "--- logs: $app"; kubectl -n telemetry logs -l app=$app --tail=80 --all-containers || true
