@@ -152,6 +152,7 @@ This is one machine shape and a handful of runs, with the first run including JV
 - Silent-device detection uses the arrival time of heartbeats, so a stalled pipeline also looks like silent devices.
 - Rate-of-change and z-score windows are held in memory and rebuilt from the stream after a restart. Open alerts are restored from PostgreSQL.
 - Delivery is at-least-once. A crash between saving an alert and committing the offset can produce a duplicate alert row.
+- Every pod runs as a fixed non-root user with the default seccomp profile, no privilege escalation and all capabilities dropped. The four application containers also have read-only root filesystems (with an `emptyDir` for `/tmp`, and for nginx's generated config). Kafka, MongoDB and PostgreSQL keep writable root filesystems because their entrypoints write configuration into the image.
 - Single-broker Kafka, single-instance databases, no TLS, development passwords and a development `JWT_SECRET`. The Kubernetes manifests are a working local demo, not a hardened deployment.
 - Only the analysis API, its WebSocket and the UI require login. The simulator's fault-injection port, ingestion's Actuator endpoints, Kafka and the databases are unauthenticated and must not be exposed.
 - Anyone who can reach the app can create a viewer account and read alerts.

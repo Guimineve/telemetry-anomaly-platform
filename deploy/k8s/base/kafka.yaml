@@ -21,9 +21,19 @@ spec:
       labels: { app: kafka }
     spec:
       enableServiceLinks: false # otherwise Kubernetes injects KAFKA_PORT=tcp://..., which breaks the image
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: kafka
           image: apache/kafka:3.9.1
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities: { drop: ["ALL"] }
           ports:
             - { name: broker, containerPort: 9092 }
           env:
