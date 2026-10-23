@@ -1,3 +1,14 @@
+# Behind a TLS-terminating ingress this server sees plain HTTP, so trust the scheme the ingress
+# reports. It decides HSTS here and the Secure cookie flag in the API (via X-Forwarded-Proto).
+map $http_x_forwarded_proto $forwarded_proto {
+    default $http_x_forwarded_proto;
+    "" $scheme;
+}
+map $forwarded_proto $hsts {
+    https "max-age=31536000; includeSubDomains";
+    default "";  # an empty value means nginx sends no header
+}
+
 server {
     listen 8080;
     server_tokens off;
@@ -10,7 +21,7 @@ server {
         proxy_pass ${ANALYSIS_UPSTREAM};
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
     }
     location = /openapi.json { proxy_pass ${ANALYSIS_UPSTREAM}; }
     location /docs { proxy_pass ${ANALYSIS_UPSTREAM}; }
@@ -22,7 +33,7 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $http_host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $forwarded_proto;
         proxy_read_timeout 1h;
     }
 

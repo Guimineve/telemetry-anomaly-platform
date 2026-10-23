@@ -1,0 +1,11 @@
+# cert-manager answers the HTTP-01 challenge from a solver pod in this namespace. The ingress
+# controller must reach it, which the namespace's default-deny policy would otherwise block.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: acme-http01-solver
+spec:
+  podSelector: { matchLabels: { acme.cert-manager.io/http01-solver: "true" } }
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{ protocol: TCP, port: 8089 }]

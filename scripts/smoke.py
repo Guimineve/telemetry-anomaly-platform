@@ -96,6 +96,22 @@ async def check_headers() -> None:
         fail(f"page CSP missing or weak: {csp!r}")
     if "nginx/" in page.headers.get("server", ""):
         fail("nginx version is exposed in the Server header")
+    if "strict-transport-security" in page.headers:
+        fail("HSTS sent on a plain-HTTP request")
+
+    # behind a TLS-terminating ingress: HSTS and a Secure session cookie
+    https = {"X-Forwarded-Proto": "https"}
+    async with httpx.AsyncClient(timeout=10) as anon:
+        page = await anon.get(f"{WEB}/", headers=https)
+        r = await anon.post(
+            f"{WEB}/api/v1/auth/login",
+            json={"username": ADMIN[0], "password": ADMIN[1]},
+            headers=https,
+        )
+    if not page.headers.get("strict-transport-security", "").startswith("max-age="):
+        fail("no HSTS header behind an HTTPS ingress")
+    if r.status_code != 200 or "secure" not in r.headers.get("set-cookie", "").lower():
+        fail(f"session cookie is not Secure behind an HTTPS ingress: {r.headers.get('set-cookie')}")
     log("security headers present")
 
 
