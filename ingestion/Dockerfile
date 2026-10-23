@@ -1,5 +1,5 @@
 # Build context is the repository root (the shared contract lives in /contracts).
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.9-eclipse-temurin-26 AS build
 WORKDIR /build
 COPY contracts ./contracts
 COPY ingestion/pom.xml ./ingestion/pom.xml
