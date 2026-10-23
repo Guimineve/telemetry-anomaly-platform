@@ -90,7 +90,7 @@ curl -b /tmp/telemetry.cookies -X POST localhost:3000/api/v1/rules -H 'content-t
 - Passwords are hashed with argon2id. Login answers the same way for an unknown user and a wrong password, and five failures per minute for a username or client IP returns 429.
 - Every `/api/v1` route and `/ws/alerts` needs the session. The WebSocket also refuses a browser `Origin` that does not match the host. `/health`, `/ready`, `/docs` and `/openapi.json` stay public.
 - The service refuses to start with a `JWT_SECRET` shorter than 32 characters.
-- The web container sends `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy` on every response, hides its nginx version, and gives the app page a strict `Content-Security-Policy` (same-origin scripts, styles and connections only). `/docs` is excluded from the CSP because Swagger UI loads from a CDN. HSTS belongs at a TLS-terminating ingress, which this repo does not have yet.
+- The web container sends `X-Content-Type-Options`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy` on every response, hides its nginx version, and gives the app page a strict `Content-Security-Policy` (same-origin scripts, styles and connections only). `/docs` is excluded from the CSP because Swagger UI loads from a CDN. Behind a TLS-terminating ingress (`X-Forwarded-Proto: https`) it also sends HSTS and passes the scheme on, so the session cookie gets the `Secure` flag.
 
 The API is documented in [docs/openapi.json](docs/openapi.json), generated from the code and checked for drift in tests and CI.
 
@@ -111,13 +111,14 @@ KEEP_CLUSTER=1 scripts/kind-e2e.sh telemetry- dev     # create cluster, deploy, 
 
 [deploy/k8s/overlays/cloud](deploy/k8s/overlays/cloud) is a provider-neutral overlay. `deploy/k8s/base` contains no secret values: the kind overlay adds development Secrets, and the cloud overlay creates them with [External Secrets Operator](https://external-secrets.io) from your provider's secret manager.
 
-1. Install External Secrets Operator and create a `ClusterSecretStore` named `telemetry-secrets` for your provider (AWS Secrets Manager, Google Secret Manager, Azure Key Vault, Vault, ...).
+1. Install External Secrets Operator and create a `ClusterSecretStore` named `telemetry-secrets` for your provider (AWS Secrets Manager, Google Secret Manager, Azure Key Vault, Vault, ...). Install an ingress controller (ingress-nginx is the default class) and cert-manager, then set your email in [deploy/k8s/cluster/cluster-issuer.yaml](deploy/k8s/cluster/cluster-issuer.yaml) and apply it once.
 2. Create two secrets there, each a JSON object:
    - `telemetry/postgres`: `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`
    - `telemetry/analysis-auth`: `JWT_SECRET` (32+ random characters), `ADMIN_USERNAME`, `ADMIN_PASSWORD` (10+ characters)
-3. `kubectl apply -k deploy/k8s/overlays/cloud` (images come from GHCR).
+3. Replace `telemetry.example.com` in [ingress.yaml](deploy/k8s/overlays/cloud/ingress.yaml) with your host and point its DNS at the ingress controller.
+4. `kubectl apply -k deploy/k8s/overlays/cloud` (images come from GHCR). cert-manager obtains a Let's Encrypt certificate for the host; a network policy lets its HTTP-01 solver through the namespace's default deny. The overlay sets `COOKIE_SECURE=true`.
 
-This overlay has been validated against the Kubernetes schemas in CI but not deployed to a real cloud cluster. Ingress and TLS are not part of it yet.
+This overlay has been validated against the Kubernetes schemas in CI but not deployed to a real cloud cluster.
 
 ## How it was tested
 
@@ -167,7 +168,7 @@ This is one machine shape and a handful of runs, with the first run including JV
 - Delivery is at-least-once. A crash between saving an alert and committing the offset can produce a duplicate alert row.
 - NetworkPolicies deny all traffic by default and allow only what the pipeline uses (web → analysis, analysis → Kafka and PostgreSQL, ingestion → Kafka and MongoDB, simulator → Kafka, plus DNS). The kind job checks that a pod labelled like `web` reaches analysis but is refused by the databases and Kafka, and that an unlabelled pod reaches nothing.
 - Every pod runs as a fixed non-root user with the default seccomp profile, no privilege escalation and all capabilities dropped. The four application containers also have read-only root filesystems (with an `emptyDir` for `/tmp`, and for nginx's generated config). Kafka, MongoDB and PostgreSQL keep writable root filesystems because their entrypoints write configuration into the image.
-- Single-broker Kafka, single-instance databases, no TLS, development passwords and a development `JWT_SECRET`. The Kubernetes manifests are a working local demo, not a hardened deployment.
+- Single-broker Kafka, single-instance databases, no TLS between services (only at the cloud overlay's ingress), development passwords and a development `JWT_SECRET`. The Kubernetes manifests are a working local demo, not a hardened deployment.
 - Only the analysis API, its WebSocket and the UI require login. The simulator's fault-injection port, ingestion's Actuator endpoints, Kafka and the databases are unauthenticated and must not be exposed.
 - Anyone who can reach the app can create a viewer account and read alerts.
 - A session cannot be revoked before it expires except by disabling the user (or changing `JWT_SECRET`, which logs everyone out). An open WebSocket keeps receiving alerts until it reconnects, even after the session expires or the user is disabled.

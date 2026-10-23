@@ -1,0 +1,15 @@
+# One-time cluster prerequisite, applied on its own (cluster-scoped, so not part of an overlay):
+#   kubectl apply -f deploy/k8s/cluster/cluster-issuer.yaml
+# Let's Encrypt via cert-manager (HTTP-01 through the ingress). Set a real contact email.
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: letsencrypt
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: admin@example.com
+    privateKeySecretRef: { name: letsencrypt-account-key }
+    solvers:
+      - http01:
+          ingress: { ingressClassName: nginx }

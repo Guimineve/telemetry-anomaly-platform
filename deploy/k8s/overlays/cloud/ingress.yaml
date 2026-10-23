@@ -1,0 +1,26 @@
+# Public entry point. Replace telemetry.example.com with your host (and in the TLS block).
+# ingressClassName defaults to ingress-nginx; change it for your controller.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt
+    # long-lived WebSocket for the live alert feed (ingress-nginx; ignored by other controllers)
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [telemetry.example.com]
+      secretName: web-tls
+  rules:
+    - host: telemetry.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port: { number: 80 }
