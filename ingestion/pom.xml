@@ -19,7 +19,7 @@
   <properties>
     <java.version>21</java.version>
     <json-schema-validator.version>1.5.9</json-schema-validator.version>
-    <jacoco.version>0.8.14</jacoco.version>
+    <jacoco.version>0.8.16</jacoco.version>
   </properties>
 
   <dependencyManagement>
